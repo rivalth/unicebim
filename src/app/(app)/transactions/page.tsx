@@ -73,9 +73,13 @@ function formatTRY(amount: number) {
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  // Next.js 16+ may provide `searchParams` as a Promise.
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const monthParam = typeof searchParams?.month === "string" ? searchParams.month : undefined;
+  const sp = await Promise.resolve(searchParams);
+  const monthParam = typeof sp?.month === "string" ? sp.month : undefined;
   const month = parseMonthParam(monthParam);
 
   const supabase = await createSupabaseServerClient();

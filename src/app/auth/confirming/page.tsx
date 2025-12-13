@@ -14,9 +14,13 @@ export const dynamic = "force-dynamic";
 export default async function ConfirmingPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  // Next.js 16+ may provide `searchParams` as a Promise.
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const next = safeRedirectPath(typeof searchParams?.next === "string" ? searchParams.next : null);
+  const sp = await Promise.resolve(searchParams);
+  const next = safeRedirectPath(typeof sp?.next === "string" ? sp.next : null);
 
   const supabase = await createSupabaseServerClient();
   const {

@@ -6,12 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import CheckEmailForm from "./check-email-form";
 
-export default function CheckEmailPage({
+export default async function CheckEmailPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  // Next.js 16+ may provide `searchParams` as a Promise.
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const email = typeof searchParams?.email === "string" ? searchParams.email : undefined;
+  const sp = await Promise.resolve(searchParams);
+  const email = typeof sp?.email === "string" ? sp.email : undefined;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-6 py-10">
