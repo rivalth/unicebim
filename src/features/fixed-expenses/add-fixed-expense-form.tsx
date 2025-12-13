@@ -20,7 +20,7 @@ type Props = {
 
 export default function AddFixedExpenseForm({ onSuccess }: Props) {
   const [serverError, setServerError] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [isPending, setIsPending] = React.useState(false);
 
   const form = useForm<CreateFixedExpenseFormInput>({
     resolver: zodResolver(createFixedExpenseSchema),
@@ -30,11 +30,12 @@ export default function AddFixedExpenseForm({ onSuccess }: Props) {
     },
   });
 
-  const onSubmit = (values: CreateFixedExpenseFormInput) => {
+  const onSubmit = async (values: CreateFixedExpenseFormInput) => {
     setServerError(null);
     form.clearErrors();
+    setIsPending(true);
 
-    startTransition(async () => {
+    try {
       const result = await createFixedExpenseAction(values);
       if (!result.ok) {
         setServerError(result.message);
@@ -46,10 +47,23 @@ export default function AddFixedExpenseForm({ onSuccess }: Props) {
         return;
       }
 
-      // Success: reset form and notify parent to refresh
-      form.reset({ name: "", amount: "" }, { keepErrors: false });
+      // Success: reset form immediately before notifying parent
+      form.reset(
+        { name: "", amount: "" },
+        {
+          keepErrors: false,
+          keepDirty: false,
+          keepIsSubmitted: false,
+          keepTouched: false,
+          keepIsValid: false,
+          keepSubmitCount: false,
+        },
+      );
+      // Notify parent after reset completes
       onSuccess?.();
-    });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
