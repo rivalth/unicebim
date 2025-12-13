@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UniCebim (Student Budget Tracker MVP)
 
-## Getting Started
+UniCebim is a modern budget & expense tracker for university students.
 
-First, run the development server:
+## Tech Stack
+
+- Next.js (App Router, `src/app`)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui-style components
+- React Hook Form + Zod
+- Zustand (client state)
+- Supabase (Auth + Postgres)
+- Vitest + Testing Library
+
+## Local Setup
+
+1. Install deps:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+yarn
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Configure env:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Fill `.env.local` with values from Supabase Dashboard → Project Settings → API:
 
-## Learn More
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-To learn more about Next.js, take a look at the following resources:
+3. Run dev server:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+yarn dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open `http://localhost:3000`.
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `yarn lint`
+- `yarn test` (watch)
+- `yarn test:run` (CI)
+- `yarn build`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Docs
+
+OpenAPI spec: `docs/openapi.yaml`
+
+## Supabase Schema (assumed)
+
+See prompt/SQL used for the MVP tables:
+
+- `profiles` (users)
+- `transactions`
+
