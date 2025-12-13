@@ -19,7 +19,7 @@ type Props = {
   initialMonthlyFixedExpenses: number | null;
 };
 
-export default function BudgetGoalForm({
+export default function BudgetSettingsForm({
   initialMonthlyBudgetGoal,
   initialMonthlyFixedExpenses,
 }: Props) {

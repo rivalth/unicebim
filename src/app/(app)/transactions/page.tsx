@@ -5,11 +5,11 @@ import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import { calculateMonthlySummary } from "@/features/transactions/summary";
 import TransactionHistory from "@/features/transactions/transaction-history";
 
 import AddTransactionForm from "./add-transaction-form";
-import BudgetGoalForm from "./budget-goal-form";
 import MonthPicker from "./month-picker";
 
 function parseMonthParam(value: unknown): {
@@ -250,7 +250,7 @@ export default async function TransactionsPage({
             <CardTitle>Bütçe hedefi</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <BudgetGoalForm
+            <BudgetSettingsForm
               initialMonthlyBudgetGoal={monthlyBudgetGoal}
               initialMonthlyFixedExpenses={monthlyFixedExpenses}
             />

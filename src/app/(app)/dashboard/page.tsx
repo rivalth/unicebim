@@ -7,6 +7,7 @@ import {
   getRealityCheckMessage,
 } from "@/features/dashboard/expense-breakdown";
 import { calculateSmartBalance } from "@/features/dashboard/smart-balance";
+import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
 import TransactionHistory from "@/features/transactions/transaction-history";
 import { logger } from "@/lib/logger";
@@ -109,6 +110,52 @@ export default async function DashboardPage() {
   const monthlyFixedExpenses = toFiniteNumber(
     (profile as unknown as { monthly_fixed_expenses?: unknown })?.monthly_fixed_expenses,
   );
+
+  // Onboarding: Show budget setup if monthly budget goal is not set.
+  const needsOnboarding = monthlyBudgetGoal == null || monthlyBudgetGoal === 0;
+
+  if (needsOnboarding) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Merhaba{displayName ? `, ${displayName}` : ""}.
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            UniCebim&apos;e hoş geldin! Başlamak için aylık bütçe hedefini belirle.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Bütçe ayarlarını yap</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Aylık hedef bütçeni ve sabit giderlerini girerek &quot;Bugün ne kadar yiyebilirim?&quot;
+              özelliğini kullanmaya başlayabilirsin.
+            </p>
+            <BudgetSettingsForm
+              initialMonthlyBudgetGoal={monthlyBudgetGoal}
+              initialMonthlyFixedExpenses={monthlyFixedExpenses}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Hızlı işlemler</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <QuickAddTransactionDialog />
+            <p className="text-sm text-muted-foreground">
+              Bütçe ayarlarını yaptıktan sonra gelir ve giderlerini ekleyebilirsin.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const transactions = (txRaw ?? []).map((t) => {
     const rawAmount = (t as unknown as { amount: unknown }).amount;
