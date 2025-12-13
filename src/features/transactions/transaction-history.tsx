@@ -151,8 +151,7 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
 
       <ul className="divide-y">
         {transactions.map((t) => {
-          const known = isKnownCategory(t.category);
-          const meta = known ? getCategoryMeta(t.category) : null;
+          const meta = isKnownCategory(t.category) ? getCategoryMeta(t.category) : null;
           const Icon = meta?.Icon ?? Tag;
 
           return (

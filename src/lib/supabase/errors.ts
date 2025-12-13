@@ -11,12 +11,15 @@ export type PostgrestErrorLike = {
  * - Schema cache not refreshed after creating tables
  * - The app is pointing to the wrong Supabase URL/project
  */
-export function isMissingTableError(error: unknown): error is Required<PostgrestErrorLike> {
+export function isMissingTableError(
+  error: unknown,
+): error is { code: "PGRST205"; message: string } {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    (error as PostgrestErrorLike).code === "PGRST205"
+    (error as PostgrestErrorLike).code === "PGRST205" &&
+    typeof (error as PostgrestErrorLike).message === "string"
   );
 }
 
