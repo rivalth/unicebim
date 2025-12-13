@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 
-import { loginAction, resendConfirmationEmailAction } from "@/app/actions/auth";
+import { loginAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,9 +15,7 @@ import { type LoginInput, loginSchema } from "@/features/auth/schemas";
 export default function LoginForm() {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
-  const [resendMessage, setResendMessage] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
-  const [isResendPending, startResendTransition] = React.useTransition();
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -29,12 +27,15 @@ export default function LoginForm() {
 
   const onSubmit = (values: LoginInput) => {
     setServerError(null);
-    setResendMessage(null);
 
     startTransition(async () => {
       const result = await loginAction(values);
 
       if (!result.ok) {
+        if (result.redirectTo) {
+          router.push(result.redirectTo);
+          return;
+        }
         setServerError(result.message);
         const fieldErrors = result.fieldErrors ?? {};
         for (const [field, messages] of Object.entries(fieldErrors)) {
@@ -45,28 +46,6 @@ export default function LoginForm() {
       }
 
       router.push(result.redirectTo ?? "/dashboard");
-    });
-  };
-
-  const onResendConfirmation = () => {
-    setServerError(null);
-    setResendMessage(null);
-
-    startResendTransition(async () => {
-      const email = form.getValues("email");
-      const result = await resendConfirmationEmailAction({ email });
-
-      if (!result.ok) {
-        setResendMessage(result.message);
-        const fieldErrors = result.fieldErrors ?? {};
-        for (const [field, messages] of Object.entries(fieldErrors)) {
-          if (!messages?.length) continue;
-          form.setError(field as keyof LoginInput, { message: messages[0] });
-        }
-        return;
-      }
-
-      if (result.message) setResendMessage(result.message);
     });
   };
 
@@ -109,24 +88,8 @@ export default function LoginForm() {
         </p>
       ) : null}
 
-      {resendMessage ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          {resendMessage}
-        </p>
-      ) : null}
-
       <Button className="w-full" type="submit" disabled={isPending}>
         {isPending ? "Giriş yapılıyor..." : "Giriş yap"}
-      </Button>
-
-      <Button
-        className="w-full"
-        type="button"
-        variant="outline"
-        disabled={isResendPending}
-        onClick={onResendConfirmation}
-      >
-        {isResendPending ? "Gönderiliyor..." : "Doğrulama e-postasını tekrar gönder"}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">

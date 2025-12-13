@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { logger } from "@/lib/logger";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -24,6 +25,7 @@ export type AuthActionResult =
       ok: false;
       message: string;
       fieldErrors?: FieldErrors;
+      redirectTo?: string;
     };
 
 function invalidInputResult(fieldErrors: FieldErrors): AuthActionResult {
@@ -46,20 +48,33 @@ export async function loginAction(input: LoginInput): Promise<AuthActionResult> 
 
   if (error) {
     logger.warn("Login failed", { code: error.code, message: error.message });
+    if (error.code === "email_not_confirmed") {
+      return {
+        ok: false,
+        message: "E-posta doğrulaması gerekiyor. Lütfen gelen kutunu kontrol et.",
+        redirectTo: `/auth/check-email?email=${encodeURIComponent(parsed.data.email)}`,
+      };
+    }
+
     // Avoid account enumeration.
-    return {
-      ok: false,
-      message:
-        "Giriş yapılamadı. E-posta/parola hatalı olabilir veya e-posta doğrulaması bekleniyor.",
-    };
+    return { ok: false, message: "E-posta veya parola hatalı." };
   }
 
   return { ok: true, redirectTo: "/dashboard" };
 }
 
+async function resolveSiteUrl(): Promise<string | null> {
+  const h = await headers();
+  const origin = h.get("origin");
+  return origin ?? process.env.NEXT_PUBLIC_SITE_URL ?? null;
+}
+
 export async function registerAction(input: RegisterInput): Promise<AuthActionResult> {
   const parsed = registerSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
+
+  const siteUrl = await resolveSiteUrl();
+  const emailRedirectTo = siteUrl ? `${siteUrl}/auth/callback` : undefined;
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signUp({
@@ -69,6 +84,7 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
       data: {
         full_name: parsed.data.fullName,
       },
+      ...(emailRedirectTo ? { emailRedirectTo } : {}),
     },
   });
 
@@ -83,7 +99,7 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
       ok: true,
       message:
         "Kayıt alındı. E-posta doğrulaması gerekiyorsa gelen kutunu kontrol et. Ardından giriş yapabilirsin.",
-      redirectTo: "/login?checkEmail=1",
+      redirectTo: `/auth/check-email?email=${encodeURIComponent(parsed.data.email)}`,
     };
   }
 
@@ -112,10 +128,14 @@ export async function resendConfirmationEmailAction(input: {
   const parsed = resendConfirmationSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
+  const siteUrl = await resolveSiteUrl();
+  const emailRedirectTo = siteUrl ? `${siteUrl}/auth/callback` : undefined;
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resend({
     type: "signup",
     email: parsed.data.email,
+    ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
   });
 
   if (error) {
