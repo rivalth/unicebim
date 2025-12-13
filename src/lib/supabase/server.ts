@@ -1,7 +1,9 @@
 import "server-only";
 
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { User } from "@supabase/supabase-js";
 
 import { envPublic } from "@/lib/env/public";
 import type { Database } from "@/lib/supabase/types";
@@ -37,5 +39,21 @@ export async function createSupabaseServerClient() {
     },
   );
 }
+
+/**
+ * Get the current authenticated user (request-scoped cache).
+ *
+ * Uses React's `cache()` to deduplicate `getUser()` calls within the same request.
+ * This prevents duplicate auth checks in Layout and Page components.
+ *
+ * @returns The authenticated user, or null if not authenticated
+ */
+export const getCachedUser = cache(async (): Promise<User | null> => {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
 
 

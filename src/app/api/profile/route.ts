@@ -2,22 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { updateMonthlyBudgetGoalSchema } from "@/features/transactions/schemas";
 
 export async function GET() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) logger.warn("api.profile.getUser failed", { message: userError.message });
+  const user = await getCachedUser();
 
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("profiles")
@@ -55,17 +51,13 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) logger.warn("api.profile.getUser failed", { message: userError.message });
+  const user = await getCachedUser();
 
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+
+  const supabase = await createSupabaseServerClient();
 
   const updates: Database["public"]["Tables"]["profiles"]["Update"] = {};
   if (parsed.data.monthlyBudgetGoal !== undefined) {

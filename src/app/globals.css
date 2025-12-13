@@ -108,4 +108,7 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  a:hover, button:hover {
+    @apply cursor-pointer;
+  }
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, PieChart, ShieldCheck, Wallet } from "lucide-react";
 
+import { AnimatedContainer } from "./animated-container";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,7 +31,7 @@ export default function Home() {
       </header>
 
       <main className="mx-auto w-full max-w-5xl px-6 pb-16 pt-10">
-        <section className="grid gap-10 lg:grid-cols-2 lg:items-center">
+        <AnimatedContainer className="grid gap-10 lg:grid-cols-2 lg:items-center">
           <div className="space-y-6">
             <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
               Öğrenci bütçeni yönet. Harcamalarını kontrol et.
@@ -51,7 +52,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <AnimatedContainer className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -77,8 +78,8 @@ export default function Home() {
                 Verilerin kullanıcı bazında izole; RLS ile korumaya uygun.
               </CardContent>
             </Card>
-          </div>
-        </section>
+          </AnimatedContainer>
+        </AnimatedContainer>
       </main>
     </div>
   );

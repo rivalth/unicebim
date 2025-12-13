@@ -1,12 +1,42 @@
+"use client";
+
 import * as React from "react";
+import { motion } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+const cardVariants = {
+  hidden: {
+    opacity: 0,
+    scale: 0.95,
+    y: 8,
+  },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+  },
+};
+
+interface CardProps extends React.ComponentProps<typeof motion.div> {
+  variants?: typeof cardVariants;
+  initial?: string | object;
+  animate?: string | object;
+}
+
+function Card({ className, variants = cardVariants, initial = "hidden", animate = "visible", ...props }: CardProps) {
   return (
-    <div
+    <motion.div
       data-slot="card"
       className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
+      variants={variants}
+      initial={initial}
+      animate={animate}
+      transition={{
+        type: "tween",
+        ease: "easeOut",
+        duration: 0.3,
+      }}
       {...props}
     />
   );

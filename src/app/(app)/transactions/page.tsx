@@ -1,10 +1,11 @@
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnimatedContainer } from "./animated-container";
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
 import { isMissingTableError } from "@/lib/supabase/errors";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import { calculateMonthlySummary } from "@/features/transactions/summary";
 import TransactionHistory from "@/features/transactions/transaction-history";
@@ -82,26 +83,39 @@ export default async function TransactionsPage({
   const monthParam = typeof sp?.month === "string" ? sp.month : undefined;
   const month = parseMonthParam(monthParam);
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    logger.warn("Transactions.getUser failed", { message: userError.message });
-  }
+  const user = await getCachedUser();
 
   if (!user) {
     // Protected by AppLayout; safe fallback.
     return null;
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("monthly_budget_goal, monthly_fixed_expenses")
-    .eq("id", user.id)
-    .maybeSingle();
+  const supabase = await createSupabaseServerClient();
+
+  // Execute database queries in parallel
+  const [profileResult, fixedExpensesResult, transactionsResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("monthly_budget_goal, monthly_fixed_expenses")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("fixed_expenses")
+      .select("id, name, amount")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("transactions")
+      .select("id, amount, type, category, date")
+      .eq("user_id", user.id)
+      .gte("date", month.start.toISOString())
+      .lt("date", month.end.toISOString())
+      .order("date", { ascending: false }),
+  ]);
+
+  const { data: profile, error: profileError } = profileResult;
+  const { data: fixedExpensesRaw, error: fixedExpensesError } = fixedExpensesResult;
+  const { data: txRaw, error: txError } = transactionsResult;
 
   if (profileError) {
     logger.warn("Transactions.profile select failed", {
@@ -110,26 +124,12 @@ export default async function TransactionsPage({
     });
   }
 
-  const { data: fixedExpensesRaw, error: fixedExpensesError } = await supabase
-    .from("fixed_expenses")
-    .select("id, name, amount")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
   if (fixedExpensesError) {
     logger.warn("Transactions.fixed_expenses select failed", {
       code: fixedExpensesError.code,
       message: fixedExpensesError.message,
     });
   }
-
-  const { data: txRaw, error: txError } = await supabase
-    .from("transactions")
-    .select("id, amount, type, category, date")
-    .eq("user_id", user.id)
-    .gte("date", month.start.toISOString())
-    .lt("date", month.end.toISOString())
-    .order("date", { ascending: false });
 
   if (txError) {
     if (isMissingTableError(txError)) {
@@ -217,7 +217,7 @@ export default async function TransactionsPage({
     monthlyBudgetGoal == null ? null : monthlyBudgetGoal - summary.expenseTotal;
 
   return (
-    <div className="space-y-8">
+    <AnimatedContainer className="space-y-8">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">İşlemler</h1>
@@ -232,7 +232,7 @@ export default async function TransactionsPage({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <AnimatedContainer className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Gelir</CardTitle>
@@ -257,9 +257,9 @@ export default async function TransactionsPage({
             {formatTRY(summary.netTotal)}
           </CardContent>
         </Card>
-      </div>
+      </AnimatedContainer>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <AnimatedContainer className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Bütçe hedefi</CardTitle>
@@ -292,7 +292,7 @@ export default async function TransactionsPage({
             <AddTransactionForm defaultDate={month.ymd} />
           </CardContent>
         </Card>
-      </div>
+      </AnimatedContainer>
 
       <Card>
         <CardHeader>
@@ -302,7 +302,7 @@ export default async function TransactionsPage({
           <TransactionHistory transactions={transactions} />
         </CardContent>
       </Card>
-    </div>
+    </AnimatedContainer>
   );
 }
 

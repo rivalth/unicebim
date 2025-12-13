@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import { createTransactionSchema } from "@/features/transactions/schemas";
 import { calculateMonthlySummary } from "@/features/transactions/summary";
 
@@ -30,17 +30,13 @@ export async function GET(request: NextRequest) {
   const monthParam = url.searchParams.get("month");
   const range = getMonthRange(monthParam);
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) logger.warn("api.transactions.getUser failed", { message: userError.message });
+  const user = await getCachedUser();
 
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+
+  const supabase = await createSupabaseServerClient();
 
   const { data: txRaw, error } = await supabase
     .from("transactions")
@@ -90,17 +86,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid date" }, { status: 400 });
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) logger.warn("api.transactions.getUser failed", { message: userError.message });
+  const user = await getCachedUser();
 
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("transactions")

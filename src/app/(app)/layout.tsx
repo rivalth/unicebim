@@ -6,7 +6,7 @@ import Link from "next/link";
 import { logoutAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
 async function ensureProfile(
@@ -45,21 +45,11 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error) {
-    // "Auth session missing!" is expected for unauthenticated visitors.
-    if (error.message !== "Auth session missing!") {
-      logger.warn("AppLayout.getUser failed", { message: error.message });
-    }
-  }
+  const user = await getCachedUser();
 
   if (!user) redirect("/login");
 
+  const supabase = await createSupabaseServerClient();
   await ensureProfile(supabase, user.id, user.user_metadata?.full_name);
 
   return (

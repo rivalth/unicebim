@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AnimatedContainer } from "./animated-container";
 import {
   buildConicGradient,
   getExpenseBreakdown,
@@ -13,7 +14,7 @@ import TransactionHistory from "@/features/transactions/transaction-history";
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
 import { isMissingTableError } from "@/lib/supabase/errors";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 
 function formatTRY(amount: number, maximumFractionDigits = 0) {
   return new Intl.NumberFormat("tr-TR", {
@@ -24,39 +25,44 @@ function formatTRY(amount: number, maximumFractionDigits = 0) {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    logger.warn("Dashboard.getUser failed", { message: userError.message });
-  }
+  const user = await getCachedUser();
 
   // AppLayout already redirects unauthenticated users; keep a safe fallback.
   if (!user) {
     return null;
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("full_name, monthly_budget_goal, monthly_fixed_expenses")
-    .eq("id", user.id)
-    .maybeSingle();
+  const supabase = await createSupabaseServerClient();
 
-  const { data: fixedExpensesRaw, error: fixedExpensesError } = await supabase
-    .from("fixed_expenses")
-    .select("id, name, amount")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  // Calculate month range (local computation, no I/O)
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-  if (fixedExpensesError) {
-    logger.warn("Dashboard.fixed_expenses select failed", {
-      code: fixedExpensesError.code,
-      message: fixedExpensesError.message,
-    });
-  }
+  // Execute database queries in parallel
+  const [profileResult, fixedExpensesResult, transactionsResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, monthly_budget_goal, monthly_fixed_expenses")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("fixed_expenses")
+      .select("id, name, amount")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("transactions")
+      .select("id, amount, type, category, date")
+      .eq("user_id", user.id)
+      .gte("date", monthStart.toISOString())
+      .lt("date", monthEnd.toISOString())
+      .order("date", { ascending: false }),
+  ]);
+
+  const { data: profile, error: profileError } = profileResult;
+  const { data: fixedExpensesRaw, error: fixedExpensesError } = fixedExpensesResult;
+  const { data: txRaw, error: txError } = transactionsResult;
 
   if (profileError) {
     logger.warn("Dashboard.profile select failed", {
@@ -65,17 +71,12 @@ export default async function DashboardPage() {
     });
   }
 
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-
-  const { data: txRaw, error: txError } = await supabase
-    .from("transactions")
-    .select("id, amount, type, category, date")
-    .eq("user_id", user.id)
-    .gte("date", monthStart.toISOString())
-    .lt("date", monthEnd.toISOString())
-    .order("date", { ascending: false });
+  if (fixedExpensesError) {
+    logger.warn("Dashboard.fixed_expenses select failed", {
+      code: fixedExpensesError.code,
+      message: fixedExpensesError.message,
+    });
+  }
 
   if (txError) {
     logger.warn("Dashboard.transactions select failed", { code: txError.code, message: txError.message });
@@ -223,7 +224,7 @@ export default async function DashboardPage() {
   const realityCheck = getRealityCheckMessage(expenseBreakdown.slices);
 
   return (
-    <div className="space-y-6">
+    <AnimatedContainer className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           Merhaba{displayName ? `, ${displayName}` : ""}.
@@ -315,7 +316,7 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <AnimatedContainer className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Hızlı işlemler</CardTitle>
@@ -340,7 +341,7 @@ export default async function DashboardPage() {
             sayfasından görüntüleyebilirsin.
           </CardContent>
         </Card>
-      </div>
+      </AnimatedContainer>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -353,7 +354,7 @@ export default async function DashboardPage() {
           <TransactionHistory transactions={transactions.slice(0, 20)} />
         </CardContent>
       </Card>
-    </div>
+    </AnimatedContainer>
   );
 }
 
