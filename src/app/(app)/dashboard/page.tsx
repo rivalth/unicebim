@@ -111,7 +111,8 @@ export default async function DashboardPage() {
     (profile as unknown as { monthly_fixed_expenses?: unknown })?.monthly_fixed_expenses,
   );
 
-  // Onboarding: Show budget setup if monthly budget goal is not set.
+  // Onboarding: Show budget setup if monthly budget goal is not set or is zero.
+  // Note: `0` is invalid per schema (requires positive), so treat it as unset and show onboarding.
   const needsOnboarding = monthlyBudgetGoal == null || monthlyBudgetGoal === 0;
 
   if (needsOnboarding) {

@@ -30,8 +30,9 @@ export default function BudgetSettingsForm({
   const form = useForm<UpdateMonthlyBudgetGoalFormInput>({
     resolver: zodResolver(updateMonthlyBudgetGoalSchema),
     defaultValues: {
-      monthlyBudgetGoal: initialMonthlyBudgetGoal ?? "",
-      monthlyFixedExpenses: initialMonthlyFixedExpenses ?? "",
+      // Convert `0` to empty string so users can enter a new value (schema requires positive).
+      monthlyBudgetGoal: initialMonthlyBudgetGoal === 0 ? "" : initialMonthlyBudgetGoal ?? "",
+      monthlyFixedExpenses: initialMonthlyFixedExpenses === 0 ? "" : initialMonthlyFixedExpenses ?? "",
     },
   });
 
