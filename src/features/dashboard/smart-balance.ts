@@ -32,11 +32,11 @@ export type SmartBalanceResult = {
  * - On the 13th => 19 (13..31)
  * - On the 31st => 1
  */
-export function getRemainingDaysInMonth(now: Date = new Date()): number {
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const today = now.getDate();
+export function getRemainingDaysInMonthUtc(now: Date = new Date()): number {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const today = now.getUTCDate();
   return Math.max(1, lastDay - today + 1);
 }
 
@@ -52,7 +52,9 @@ function safeNumber(value: number) {
  */
 export function calculateSmartBalance(input: SmartBalanceInput): SmartBalanceResult {
   const now = input.now ?? new Date();
-  const remainingDaysInMonth = getRemainingDaysInMonth(now);
+  // IMPORTANT: Dashboard uses UTC month boundaries for querying transactions.
+  // Keep day-remaining calculation in the same calendar (UTC) to avoid cross-month mismatches.
+  const remainingDaysInMonth = getRemainingDaysInMonthUtc(now);
 
   const totalMoney = safeNumber(input.totalMoney);
   const expenseTotal = safeNumber(input.expenseTotal);
