@@ -209,9 +209,6 @@ export default async function TransactionsPage({
   const monthlyBudgetGoal = toFiniteNumber(
     (profile as unknown as { monthly_budget_goal?: unknown })?.monthly_budget_goal,
   );
-  const monthlyFixedExpenses = toFiniteNumber(
-    (profile as unknown as { monthly_fixed_expenses?: unknown })?.monthly_fixed_expenses,
-  );
   const remaining =
     monthlyBudgetGoal == null ? null : monthlyBudgetGoal - summary.expenseTotal;
 

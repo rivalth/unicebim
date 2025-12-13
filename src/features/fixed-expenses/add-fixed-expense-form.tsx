@@ -16,10 +16,12 @@ import {
 } from "@/features/fixed-expenses/schemas";
 
 type Props = {
+  onAdd?: (name: string, amount: number) => void;
+  onError?: (name: string, amount: number) => void;
   onSuccess?: () => void;
 };
 
-export default function AddFixedExpenseForm({ onSuccess }: Props) {
+export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -35,9 +37,31 @@ export default function AddFixedExpenseForm({ onSuccess }: Props) {
   const onSubmit = (values: CreateFixedExpenseFormInput) => {
     setServerError(null);
 
+    // Parse amount for optimistic update
+    const amountValue =
+      typeof values.amount === "number"
+        ? values.amount
+        : typeof values.amount === "string"
+          ? Number(values.amount.replace(",", "."))
+          : 0;
+
+    // Optimistic update: add immediately to list
+    if (onAdd && Number.isFinite(amountValue) && amountValue > 0) {
+      onAdd(values.name, amountValue);
+    }
+
+    // Reset form immediately (don't wait for server)
+    form.reset({ name: "", amount: "" });
+
+    // Submit to server in background
     startTransition(async () => {
       const result = await createFixedExpenseAction(values);
       if (!result.ok) {
+        // Rollback optimistic update on error
+        if (onError && Number.isFinite(amountValue) && amountValue > 0) {
+          onError(values.name, amountValue);
+        }
+
         setServerError(result.message);
         const fieldErrors = result.fieldErrors ?? {};
         for (const [field, messages] of Object.entries(fieldErrors)) {
@@ -47,9 +71,9 @@ export default function AddFixedExpenseForm({ onSuccess }: Props) {
         return;
       }
 
-      form.reset({ name: "", amount: "" });
-      router.refresh();
+      // Success: refresh to get real data (replaces temp IDs)
       onSuccess?.();
+      router.refresh();
     });
   };
 

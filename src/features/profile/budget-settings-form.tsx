@@ -30,11 +30,17 @@ type Props = {
 
 export default function BudgetSettingsForm({
   initialMonthlyBudgetGoal,
-  fixedExpenses,
+  fixedExpenses: initialFixedExpenses,
 }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const [expenses, setExpenses] = React.useState<FixedExpense[]>(initialFixedExpenses);
+
+  // Sync with server data when it changes (e.g., after refresh)
+  React.useEffect(() => {
+    setExpenses(initialFixedExpenses);
+  }, [initialFixedExpenses]);
 
   const form = useForm<UpdateMonthlyBudgetGoalFormInput>({
     resolver: zodResolver(updateMonthlyBudgetGoalSchema),
@@ -59,6 +65,26 @@ export default function BudgetSettingsForm({
       router.refresh();
     });
   };
+
+  const handleAddExpense = React.useCallback(
+    (name: string, amount: number) => {
+      // Optimistic update: add immediately with temporary ID
+      const tempId = `temp-${Date.now()}-${Math.random()}`;
+      const newExpense: FixedExpense = { id: tempId, name, amount };
+      setExpenses((prev) => [newExpense, ...prev]);
+    },
+    [],
+  );
+
+  const handleAddError = React.useCallback((name: string, amount: number) => {
+    // Rollback: remove the optimistically added expense
+    setExpenses((prev) => prev.filter((e) => !(e.name === name && e.amount === amount && e.id.startsWith("temp-"))));
+  }, []);
+
+  const handleAddSuccess = React.useCallback(() => {
+    // Refresh to get real data from server (replaces temp IDs with real ones)
+    router.refresh();
+  }, [router]);
 
   return (
     <div className="space-y-6">
@@ -93,10 +119,14 @@ export default function BudgetSettingsForm({
             Kira/yurt, abonelikler ve telefon gibi sabit giderlerini ekle. Sistem otomatik olarak
             toplamı hesaplar.
           </p>
-          <FixedExpensesList expenses={fixedExpenses} />
-          <div className="border-t pt-4">
-            <AddFixedExpenseForm />
+          <div className="border-b pb-4">
+            <AddFixedExpenseForm
+              onAdd={handleAddExpense}
+              onError={handleAddError}
+              onSuccess={handleAddSuccess}
+            />
           </div>
+          <FixedExpensesList expenses={expenses} />
         </CardContent>
       </Card>
     </div>
