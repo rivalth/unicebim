@@ -15,8 +15,16 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid references auth.users not null primary key,
   full_name text,
-  monthly_budget_goal numeric
+  monthly_budget_goal numeric,
+  monthly_fixed_expenses numeric
 );
+
+-- If tables already exist, ensure new MVP columns are present.
+alter table public.profiles
+  add column if not exists monthly_budget_goal numeric;
+
+alter table public.profiles
+  add column if not exists monthly_fixed_expenses numeric;
 
 -- Transactions
 create table if not exists public.transactions (

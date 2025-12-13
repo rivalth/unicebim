@@ -36,6 +36,14 @@ export const updateMonthlyBudgetGoalSchema = z.object({
       return val;
     }, z.number().finite().positive().nullable())
     .optional(),
+  monthlyFixedExpenses: z
+    .preprocess((val) => {
+      if (val === "" || val == null) return null;
+      if (typeof val === "number") return val;
+      if (typeof val === "string") return Number(val.replace(",", "."));
+      return val;
+    }, z.number().finite().nonnegative().nullable())
+    .optional(),
 });
 
 export type UpdateMonthlyBudgetGoalFormInput = z.input<typeof updateMonthlyBudgetGoalSchema>;

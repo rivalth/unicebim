@@ -15,10 +15,14 @@ import {
 } from "@/features/transactions/schemas";
 
 type Props = {
-  initialValue: number | null;
+  initialMonthlyBudgetGoal: number | null;
+  initialMonthlyFixedExpenses: number | null;
 };
 
-export default function BudgetGoalForm({ initialValue }: Props) {
+export default function BudgetGoalForm({
+  initialMonthlyBudgetGoal,
+  initialMonthlyFixedExpenses,
+}: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -26,7 +30,8 @@ export default function BudgetGoalForm({ initialValue }: Props) {
   const form = useForm<UpdateMonthlyBudgetGoalFormInput>({
     resolver: zodResolver(updateMonthlyBudgetGoalSchema),
     defaultValues: {
-      monthlyBudgetGoal: initialValue ?? "",
+      monthlyBudgetGoal: initialMonthlyBudgetGoal ?? "",
+      monthlyFixedExpenses: initialMonthlyFixedExpenses ?? "",
     },
   });
 
@@ -53,6 +58,19 @@ export default function BudgetGoalForm({ initialValue }: Props) {
           placeholder="Örn: 5000"
           {...form.register("monthlyBudgetGoal")}
         />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="monthlyFixedExpenses">Aylık sabit giderler (₺)</Label>
+        <Input
+          id="monthlyFixedExpenses"
+          inputMode="decimal"
+          placeholder="Örn: 2200"
+          {...form.register("monthlyFixedExpenses")}
+        />
+        <p className="text-xs text-muted-foreground">
+          Kira/yurt, abonelikler ve telefon gibi sabit giderler için ayırdığın toplam tutar.
+        </p>
       </div>
 
       {serverError ? (

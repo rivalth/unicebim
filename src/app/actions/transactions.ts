@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { logger } from "@/lib/logger";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/types";
 import {
   type CreateTransactionFormInput,
   createTransactionSchema,
@@ -88,12 +89,21 @@ export async function updateMonthlyBudgetGoalAction(
     return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
 
-  const monthlyBudgetGoal =
-    parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
+  const updates: Database["public"]["Tables"]["profiles"]["Update"] = {};
+  if (parsed.data.monthlyBudgetGoal !== undefined) {
+    updates.monthly_budget_goal =
+      parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
+  }
+  if (parsed.data.monthlyFixedExpenses !== undefined) {
+    updates.monthly_fixed_expenses =
+      parsed.data.monthlyFixedExpenses == null ? null : parsed.data.monthlyFixedExpenses;
+  }
+
+  if (Object.keys(updates).length === 0) return { ok: true };
 
   const { error: updateError } = await supabase
     .from("profiles")
-    .update({ monthly_budget_goal: monthlyBudgetGoal })
+    .update(updates)
     .eq("id", user.id);
 
   if (updateError) {

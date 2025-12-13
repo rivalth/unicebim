@@ -102,7 +102,7 @@ export default async function TransactionsPage({
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("monthly_budget_goal")
+    .select("monthly_budget_goal, monthly_fixed_expenses")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -202,6 +202,9 @@ export default async function TransactionsPage({
   const monthlyBudgetGoal = toFiniteNumber(
     (profile as unknown as { monthly_budget_goal?: unknown })?.monthly_budget_goal,
   );
+  const monthlyFixedExpenses = toFiniteNumber(
+    (profile as unknown as { monthly_fixed_expenses?: unknown })?.monthly_fixed_expenses,
+  );
   const remaining =
     monthlyBudgetGoal == null ? null : monthlyBudgetGoal - summary.expenseTotal;
 
@@ -254,7 +257,10 @@ export default async function TransactionsPage({
             <CardTitle>Bütçe hedefi</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <BudgetGoalForm initialValue={monthlyBudgetGoal} />
+            <BudgetGoalForm
+              initialMonthlyBudgetGoal={monthlyBudgetGoal}
+              initialMonthlyFixedExpenses={monthlyFixedExpenses}
+            />
             {monthlyBudgetGoal != null ? (
               <p className="text-sm text-muted-foreground">
                 Kalan:{" "}

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/types";
 import { updateMonthlyBudgetGoalSchema } from "@/features/transactions/schemas";
 
 export async function GET() {
@@ -20,7 +21,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, monthly_budget_goal")
+    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -34,6 +35,9 @@ export async function GET() {
         ...data,
         monthly_budget_goal: toFiniteNumber(
           (data as unknown as { monthly_budget_goal?: unknown }).monthly_budget_goal,
+        ),
+        monthly_fixed_expenses: toFiniteNumber(
+          (data as unknown as { monthly_fixed_expenses?: unknown }).monthly_fixed_expenses,
         ),
       }
     : null;
@@ -63,14 +67,25 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const monthlyBudgetGoal =
-    parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
+  const updates: Database["public"]["Tables"]["profiles"]["Update"] = {};
+  if (parsed.data.monthlyBudgetGoal !== undefined) {
+    updates.monthly_budget_goal =
+      parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
+  }
+  if (parsed.data.monthlyFixedExpenses !== undefined) {
+    updates.monthly_fixed_expenses =
+      parsed.data.monthlyFixedExpenses == null ? null : parsed.data.monthlyFixedExpenses;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ profile: null }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from("profiles")
-    .update({ monthly_budget_goal: monthlyBudgetGoal })
+    .update(updates)
     .eq("id", user.id)
-    .select("id, full_name, monthly_budget_goal")
+    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
     .maybeSingle();
 
   if (error) {
@@ -83,6 +98,9 @@ export async function PATCH(request: NextRequest) {
         ...data,
         monthly_budget_goal: toFiniteNumber(
           (data as unknown as { monthly_budget_goal?: unknown }).monthly_budget_goal,
+        ),
+        monthly_fixed_expenses: toFiniteNumber(
+          (data as unknown as { monthly_fixed_expenses?: unknown }).monthly_fixed_expenses,
         ),
       }
     : null;

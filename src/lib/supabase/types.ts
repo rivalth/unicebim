@@ -25,16 +25,19 @@ export interface Database {
           id: string;
           full_name: string | null;
           monthly_budget_goal: number | null;
+          monthly_fixed_expenses: number | null;
         };
         Insert: {
           id: string;
           full_name?: string | null;
           monthly_budget_goal?: number | null;
+          monthly_fixed_expenses?: number | null;
         };
         Update: {
           id?: string;
           full_name?: string | null;
           monthly_budget_goal?: number | null;
+          monthly_fixed_expenses?: number | null;
         };
         Relationships: [];
       };
