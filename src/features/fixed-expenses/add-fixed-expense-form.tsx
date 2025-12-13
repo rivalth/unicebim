@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import { createFixedExpenseAction } from "@/app/actions/fixed-expenses";
 import { Button } from "@/components/ui/button";
@@ -16,13 +15,12 @@ import {
 } from "@/features/fixed-expenses/schemas";
 
 type Props = {
-  onAdd?: (name: string, amount: number) => void;
-  onError?: (name: string, amount: number) => void;
+  onAdd?: (name: string, amount: number) => string | void;
+  onError?: (expenseId: string) => void;
   onSuccess?: () => void;
 };
 
 export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props) {
-  const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -46,9 +44,13 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
           ? Number(values.amount.replace(",", "."))
           : 0;
 
-    // Optimistic update: add immediately to list
+    // Optimistic update: add immediately to list and get the temp ID
+    let tempExpenseId: string | undefined;
     if (onAdd && Number.isFinite(amountValue) && amountValue > 0) {
-      onAdd(values.name, amountValue);
+      const id = onAdd(values.name, amountValue);
+      if (typeof id === "string") {
+        tempExpenseId = id;
+      }
     }
 
     // Reset form immediately (don't wait for server)
@@ -58,9 +60,9 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
     startTransition(async () => {
       const result = await createFixedExpenseAction(values);
       if (!result.ok) {
-        // Rollback optimistic update on error
-        if (onError && Number.isFinite(amountValue) && amountValue > 0) {
-          onError(values.name, amountValue);
+        // Rollback optimistic update on error using the specific temp ID
+        if (onError && tempExpenseId) {
+          onError(tempExpenseId);
         }
 
         setServerError(result.message);

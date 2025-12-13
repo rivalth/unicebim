@@ -83,10 +83,7 @@ export default function BudgetSettingsForm({
 
   const handleAddSuccess = React.useCallback(() => {
     // Refresh to get real data from server (replaces temp IDs with real ones)
-    // Use setTimeout to avoid blocking form state
-    setTimeout(() => {
-      router.refresh();
-    }, 100);
+    router.refresh();
   }, [router]);
 
   return (
@@ -135,4 +132,3 @@ export default function BudgetSettingsForm({
     </div>
   );
 }
-
