@@ -6,6 +6,7 @@ import { toFiniteNumber } from "@/lib/number";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateMonthlySummary } from "@/features/transactions/summary";
+import TransactionHistory from "@/features/transactions/transaction-history";
 
 import AddTransactionForm from "./add-transaction-form";
 import BudgetGoalForm from "./budget-goal-form";
@@ -279,33 +280,7 @@ export default async function TransactionsPage({
           <CardTitle>Bu ayın işlemleri</CardTitle>
         </CardHeader>
         <CardContent>
-          {transactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Henüz işlem yok.</p>
-          ) : (
-            <ul className="divide-y">
-              {transactions.map((t) => (
-                <li className="flex items-center justify-between gap-4 py-3" key={t.id}>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{t.category}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(t.date).toLocaleDateString("tr-TR")} •{" "}
-                      {t.type === "income" ? "Gelir" : "Gider"}
-                    </div>
-                  </div>
-                  <div
-                    className={
-                      t.type === "income"
-                        ? "text-sm font-medium text-emerald-600"
-                        : "text-sm font-medium text-rose-600"
-                    }
-                  >
-                    {t.type === "income" ? "+" : "-"}
-                    {formatTRY(t.amount)}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <TransactionHistory transactions={transactions} />
         </CardContent>
       </Card>
     </div>
