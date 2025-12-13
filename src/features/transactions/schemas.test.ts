@@ -11,7 +11,7 @@ describe("transactions schemas", () => {
       const parsed = createTransactionSchema.parse({
         amount: "12,5",
         type: "expense",
-        category: "Yemek",
+        category: "Beslenme",
         date: "2025-12-01",
       });
 
@@ -24,7 +24,7 @@ describe("transactions schemas", () => {
         createTransactionSchema.parse({
           amount: 10,
           type: "income",
-          category: "Burs",
+          category: "KYK/Burs",
           date: "01-12-2025",
         }),
       ).toThrow();
@@ -35,6 +35,11 @@ describe("transactions schemas", () => {
     it("treats empty string as null", () => {
       const parsed = updateMonthlyBudgetGoalSchema.parse({ monthlyBudgetGoal: "" });
       expect(parsed.monthlyBudgetGoal).toBeNull();
+    });
+
+    it("treats empty fixed expenses as null", () => {
+      const parsed = updateMonthlyBudgetGoalSchema.parse({ monthlyFixedExpenses: "" });
+      expect(parsed.monthlyFixedExpenses).toBeNull();
     });
   });
 });

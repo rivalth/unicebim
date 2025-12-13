@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { calculateSmartBalance } from "@/features/dashboard/smart-balance";
+import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
 import { isMissingTableError } from "@/lib/supabase/errors";
@@ -187,8 +188,11 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Hızlı işlemler</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Sonraki adım: 1 tıkla açılan hızlı ekleme (modal) + ikonlu kategori seçimi.
+          <CardContent className="space-y-3">
+            <QuickAddTransactionDialog />
+            <p className="text-sm text-muted-foreground">
+              Tek ekranda: Tutar → Kategori → Kaydet.
+            </p>
           </CardContent>
         </Card>
 

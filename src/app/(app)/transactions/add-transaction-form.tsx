@@ -2,13 +2,15 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useRouter } from "next/navigation";
 
 import { createTransactionAction } from "@/app/actions/transactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, type TransactionCategory } from "@/features/transactions/categories";
+import { getCategoryMeta } from "@/features/transactions/category-meta";
 import {
   createTransactionSchema,
   type CreateTransactionFormInput,
@@ -16,10 +18,12 @@ import {
 
 type Props = {
   defaultDate: string; // YYYY-MM-DD
-  defaultCategory?: string;
 };
 
-export default function AddTransactionForm({ defaultDate, defaultCategory }: Props) {
+const DEFAULT_EXPENSE_CATEGORY: TransactionCategory = "Beslenme";
+const DEFAULT_INCOME_CATEGORY: TransactionCategory = "KYK/Burs";
+
+export default function AddTransactionForm({ defaultDate }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -29,10 +33,28 @@ export default function AddTransactionForm({ defaultDate, defaultCategory }: Pro
     defaultValues: {
       amount: "",
       type: "expense",
-      category: defaultCategory ?? "",
+      category: DEFAULT_EXPENSE_CATEGORY,
       date: defaultDate,
     },
   });
+
+  const type = useWatch({ control: form.control, name: "type" });
+  const selectedCategory = useWatch({ control: form.control, name: "category" });
+
+  React.useEffect(() => {
+    const current = form.getValues("category");
+    if (type === "income") {
+      const isValid = (INCOME_CATEGORIES as readonly string[]).includes(current);
+      if (!isValid) {
+        form.setValue("category", DEFAULT_INCOME_CATEGORY, { shouldValidate: true });
+      }
+    } else {
+      const isValid = (EXPENSE_CATEGORIES as readonly string[]).includes(current);
+      if (!isValid) {
+        form.setValue("category", DEFAULT_EXPENSE_CATEGORY, { shouldValidate: true });
+      }
+    }
+  }, [form, type]);
 
   const onSubmit = (values: CreateTransactionFormInput) => {
     setServerError(null);
@@ -50,7 +72,12 @@ export default function AddTransactionForm({ defaultDate, defaultCategory }: Pro
         return;
       }
 
-      form.reset({ ...form.getValues(), amount: "", category: "", type: "expense" });
+      form.reset({
+        amount: "",
+        type: "expense",
+        category: DEFAULT_EXPENSE_CATEGORY,
+        date: defaultDate,
+      });
       router.refresh();
     });
   };
@@ -86,7 +113,25 @@ export default function AddTransactionForm({ defaultDate, defaultCategory }: Pro
 
       <div className="grid gap-2">
         <Label htmlFor="category">Kategori</Label>
-        <Input id="category" placeholder="Örn: Yemek" {...form.register("category")} />
+        <input id="category" type="hidden" {...form.register("category")} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {(type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((category) => {
+            const { Icon, label } = getCategoryMeta(category as TransactionCategory);
+            const isSelected = selectedCategory === category;
+            return (
+              <Button
+                key={category}
+                type="button"
+                variant={isSelected ? "default" : "outline"}
+                className="justify-start"
+                onClick={() => form.setValue("category", category as TransactionCategory, { shouldValidate: true })}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                <span className="truncate">{label}</span>
+              </Button>
+            );
+          })}
+        </div>
         {form.formState.errors.category?.message ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formState.errors.category.message}
