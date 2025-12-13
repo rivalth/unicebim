@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loginSchema, registerSchema } from "@/features/auth/schemas";
+import { loginSchema, registerSchema, resendConfirmationSchema } from "@/features/auth/schemas";
 
 describe("auth schemas", () => {
   describe("loginSchema", () => {
@@ -42,6 +42,17 @@ describe("auth schemas", () => {
       if (!result.success) {
         expect(result.error.flatten().fieldErrors.passwordConfirm?.[0]).toBe("Parolalar eşleşmiyor.");
       }
+    });
+  });
+
+  describe("resendConfirmationSchema", () => {
+    it("accepts a valid email", () => {
+      const parsed = resendConfirmationSchema.parse({ email: "user@example.com" });
+      expect(parsed.email).toBe("user@example.com");
+    });
+
+    it("rejects an invalid email", () => {
+      expect(() => resendConfirmationSchema.parse({ email: "nope" })).toThrow();
     });
   });
 });

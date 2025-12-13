@@ -5,7 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import LoginForm from "./login-form";
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  const checkEmail = searchParams?.checkEmail === "1";
+
   return (
     <div className="w-full max-w-md">
       <div className="mb-6 flex items-center justify-between">
@@ -22,6 +28,12 @@ export default function LoginPage() {
           <CardTitle>Giriş</CardTitle>
         </CardHeader>
         <CardContent>
+          {checkEmail ? (
+            <div className="mb-4 rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+              Kayıt tamamlandı. Eğer e-posta doğrulaması açıksa, giriş yapmadan önce gelen
+              kutundaki doğrulama linkine tıklaman gerekir.
+            </div>
+          ) : null}
           <LoginForm />
         </CardContent>
       </Card>

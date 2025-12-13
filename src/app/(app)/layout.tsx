@@ -52,7 +52,10 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
 
   if (error) {
-    logger.warn("AppLayout.getUser failed", { message: error.message });
+    // "Auth session missing!" is expected for unauthenticated visitors.
+    if (error.message !== "Auth session missing!") {
+      logger.warn("AppLayout.getUser failed", { message: error.message });
+    }
   }
 
   if (!user) redirect("/login");

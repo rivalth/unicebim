@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   type LoginInput,
   loginSchema,
+  resendConfirmationSchema,
   type RegisterInput,
   registerSchema,
 } from "@/features/auth/schemas";
@@ -46,7 +47,11 @@ export async function loginAction(input: LoginInput): Promise<AuthActionResult> 
   if (error) {
     logger.warn("Login failed", { code: error.code, message: error.message });
     // Avoid account enumeration.
-    return { ok: false, message: "E-posta veya parola hatalı." };
+    return {
+      ok: false,
+      message:
+        "Giriş yapılamadı. E-posta/parola hatalı olabilir veya e-posta doğrulaması bekleniyor.",
+    };
   }
 
   return { ok: true, redirectTo: "/dashboard" };
@@ -78,7 +83,7 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
       ok: true,
       message:
         "Kayıt alındı. E-posta doğrulaması gerekiyorsa gelen kutunu kontrol et. Ardından giriş yapabilirsin.",
-      redirectTo: "/login",
+      redirectTo: "/login?checkEmail=1",
     };
   }
 
@@ -99,6 +104,33 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
   }
 
   return { ok: true, redirectTo: "/dashboard" };
+}
+
+export async function resendConfirmationEmailAction(input: {
+  email: string;
+}): Promise<AuthActionResult> {
+  const parsed = resendConfirmationSchema.safeParse(input);
+  if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: parsed.data.email,
+  });
+
+  if (error) {
+    logger.warn("Resend confirmation email failed", {
+      code: error.code,
+      message: error.message,
+    });
+    // Avoid account enumeration and keep UX simple.
+  }
+
+  return {
+    ok: true,
+    message:
+      "Eğer bu e-posta ile kayıt varsa, doğrulama e-postası tekrar gönderildi. Gelen kutunu ve spam klasörünü kontrol et.",
+  };
 }
 
 export async function logoutAction() {

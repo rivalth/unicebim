@@ -5,6 +5,10 @@ export const loginSchema = z.object({
   password: z.string().min(8, "Parola en az 8 karakter olmalı."),
 });
 
+export const resendConfirmationSchema = z.object({
+  email: z.string().trim().min(1).email(),
+});
+
 export const registerSchema = z
   .object({
     fullName: z
@@ -22,6 +26,7 @@ export const registerSchema = z
   });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+export type ResendConfirmationInput = z.infer<typeof resendConfirmationSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 
