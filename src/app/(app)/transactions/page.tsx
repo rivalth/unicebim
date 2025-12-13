@@ -3,21 +3,13 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
+import { isMissingTableError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateMonthlySummary } from "@/features/transactions/summary";
 
 import AddTransactionForm from "./add-transaction-form";
 import BudgetGoalForm from "./budget-goal-form";
 import MonthPicker from "./month-picker";
-
-function isMissingTableError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "PGRST205"
-  );
-}
 
 function parseMonthParam(value: unknown): {
   start: Date;
