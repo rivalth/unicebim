@@ -36,6 +36,7 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
 
   const onSubmit = (values: CreateFixedExpenseFormInput) => {
     setServerError(null);
+    form.clearErrors();
 
     // Parse amount for optimistic update
     const amountValue =
@@ -51,7 +52,7 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
     }
 
     // Reset form immediately (don't wait for server)
-    form.reset({ name: "", amount: "" });
+    form.reset({ name: "", amount: "" }, { keepErrors: false });
 
     // Submit to server in background
     startTransition(async () => {
@@ -71,9 +72,8 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
         return;
       }
 
-      // Success: refresh to get real data (replaces temp IDs)
+      // Success: notify parent (it will refresh to get real IDs)
       onSuccess?.();
-      router.refresh();
     });
   };
 
