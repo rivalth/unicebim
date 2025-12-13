@@ -4,6 +4,15 @@ import { toFiniteNumber } from "@/lib/number";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
+function isMissingTableError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "PGRST205"
+  );
+}
+
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -31,6 +40,36 @@ export default async function DashboardPage() {
       code: profileError.code,
       message: profileError.message,
     });
+  }
+
+  if (isMissingTableError(profileError)) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Supabase veritabanı kurulumu tamamlanmamış görünüyor.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>DB kurulumu gerekli</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">profiles</span> tablosu
+              bulunamadı. Supabase SQL Editor’de{" "}
+              <span className="font-medium text-foreground">docs/supabase.sql</span> dosyasını
+              çalıştırın.
+            </p>
+            <Link className="underline underline-offset-4" href="/transactions">
+              İşlemler sayfasına git
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const displayName =

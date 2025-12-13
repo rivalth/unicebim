@@ -5,6 +5,10 @@
 - Spec file: `docs/openapi.yaml`
 - Local server (default): `http://localhost:3000`
 
+## Database (Supabase)
+
+- Schema + RLS script: `docs/supabase.sql`
+
 ## Auth (Supabase Email Confirmation)
 
 UniCebim uses Supabase email confirmation links.

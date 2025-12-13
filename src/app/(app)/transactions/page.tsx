@@ -10,6 +10,15 @@ import AddTransactionForm from "./add-transaction-form";
 import BudgetGoalForm from "./budget-goal-form";
 import MonthPicker from "./month-picker";
 
+function isMissingTableError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "PGRST205"
+  );
+}
+
 function parseMonthParam(value: unknown): {
   start: Date;
   end: Date;
@@ -113,7 +122,68 @@ export default async function TransactionsPage({
     .order("date", { ascending: false });
 
   if (txError) {
-    logger.error("Transactions.select failed", { code: txError.code, message: txError.message });
+    if (isMissingTableError(txError)) {
+      logger.warn("Transactions table missing", { code: txError.code, message: txError.message });
+    } else {
+      logger.error("Transactions.select failed", { code: txError.code, message: txError.message });
+    }
+  }
+
+  const missingTables: string[] = [];
+  if (isMissingTableError(profileError)) missingTables.push("profiles");
+  if (isMissingTableError(txError)) missingTables.push("transactions");
+
+  if (missingTables.length > 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">İşlemler</h1>
+          <p className="text-sm text-muted-foreground">
+            Supabase veritabanı kurulumu tamamlanmamış görünüyor.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>DB kurulumu gerekli</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Supabase tarafında şu tablolar bulunamadı:{" "}
+              <span className="font-medium text-foreground">
+                {missingTables.join(", ")}
+              </span>
+              .
+            </p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>
+                Supabase Dashboard → SQL Editor’de{" "}
+                <span className="font-medium text-foreground">docs/supabase.sql</span>{" "}
+                dosyasını çalıştırın.
+              </li>
+              <li>
+                Ardından Supabase Dashboard → Settings → API →{" "}
+                <span className="font-medium text-foreground">Reload schema</span> yapın
+                (gerekirse).
+              </li>
+              <li>
+                Bu projede kullanılan Supabase projesinin doğru olduğundan emin olun (
+                <span className="font-medium text-foreground">
+                  NEXT_PUBLIC_SUPABASE_URL
+                </span>
+                ).
+              </li>
+            </ol>
+
+            <div className="pt-2">
+              <Link className="underline underline-offset-4" href="/dashboard">
+                Dashboard’a dön
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const transactions = (txRaw ?? []).map((t) => {
