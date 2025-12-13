@@ -1,6 +1,11 @@
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildConicGradient,
+  getExpenseBreakdown,
+  getRealityCheckMessage,
+} from "@/features/dashboard/expense-breakdown";
 import { calculateSmartBalance } from "@/features/dashboard/smart-balance";
 import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
 import TransactionHistory from "@/features/transactions/transaction-history";
@@ -140,6 +145,14 @@ export default async function DashboardPage() {
   const dailyColor =
     daily < 0 ? "text-destructive" : daily < 100 ? "text-amber-600" : "text-emerald-600";
 
+  const expenseBreakdown = getExpenseBreakdown(
+    transactions
+      .filter((t) => t.type === "expense")
+      .map((t) => ({ category: t.category, amount: t.amount })),
+  );
+  const expenseGradient = buildConicGradient(expenseBreakdown.slices);
+  const realityCheck = getRealityCheckMessage(expenseBreakdown.slices);
+
   return (
     <div className="space-y-6">
       <div>
@@ -181,6 +194,55 @@ export default async function DashboardPage() {
             Not: Gelir girdiysen “ay toplam para” gelir toplamıdır; gelir girmediysen aylık hedef bütçe
             kullanılır.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reality Check (Bu Ay)</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2 sm:items-center">
+          <div className="flex items-center justify-center">
+            <div
+              className="relative size-40 rounded-full border bg-background"
+              style={{ background: expenseGradient }}
+            >
+              <div className="absolute inset-5 flex items-center justify-center rounded-full bg-background">
+                <div className="text-center">
+                  <div className="text-xs text-muted-foreground">Toplam gider</div>
+                  <div className="text-sm font-semibold">
+                    {formatTRY(expenseBreakdown.total, 0)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{realityCheck}</p>
+
+            {expenseBreakdown.slices.length > 0 ? (
+              <ul className="space-y-2">
+                {expenseBreakdown.slices.map((s) => (
+                  <li className="flex items-center justify-between text-sm" key={s.category}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block size-3 rounded-full"
+                        style={{ backgroundColor: s.color }}
+                        aria-hidden="true"
+                      />
+                      <span className="text-muted-foreground">{s.category}</span>
+                    </div>
+                    <div className="tabular-nums text-foreground">
+                      %{Math.round(s.percent * 100)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Bu ay henüz gider yok.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
