@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   createTransactionSchema,
+  deleteTransactionSchema,
+  updateTransactionSchema,
   updateMonthlyBudgetGoalSchema,
 } from "@/features/transactions/schemas";
 
@@ -28,6 +30,26 @@ describe("transactions schemas", () => {
           date: "01-12-2025",
         }),
       ).toThrow();
+    });
+  });
+
+  describe("updateTransactionSchema", () => {
+    it("accepts a valid payload", () => {
+      const parsed = updateTransactionSchema.parse({
+        id: "3f2f2ce1-9a6b-4ad3-9b3f-9d7e5d2a2a2a",
+        amount: 100,
+        type: "expense",
+        category: "Ulaşım",
+        date: "2025-12-02",
+      });
+
+      expect(parsed.id).toBe("3f2f2ce1-9a6b-4ad3-9b3f-9d7e5d2a2a2a");
+    });
+  });
+
+  describe("deleteTransactionSchema", () => {
+    it("rejects invalid UUIDs", () => {
+      expect(() => deleteTransactionSchema.parse({ id: "not-a-uuid" })).toThrow();
     });
   });
 

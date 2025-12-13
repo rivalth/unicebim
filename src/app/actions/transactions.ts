@@ -8,8 +8,12 @@ import type { Database } from "@/lib/supabase/types";
 import {
   type CreateTransactionFormInput,
   createTransactionSchema,
+  type DeleteTransactionInput,
+  deleteTransactionSchema,
   type UpdateMonthlyBudgetGoalFormInput,
   updateMonthlyBudgetGoalSchema,
+  type UpdateTransactionFormInput,
+  updateTransactionSchema,
 } from "@/features/transactions/schemas";
 
 type FieldErrors = Record<string, string[] | undefined>;
@@ -112,6 +116,100 @@ export async function updateMonthlyBudgetGoalAction(
       message: updateError.message,
     });
     return { ok: false, message: "Bütçe hedefi güncellenemedi." };
+  }
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+
+  return { ok: true };
+}
+
+export async function updateTransactionAction(
+  input: UpdateTransactionFormInput,
+): Promise<TransactionsActionResult> {
+  const parsed = updateTransactionSchema.safeParse(input);
+  if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    logger.warn("updateTransaction.getUser failed", { message: userError.message });
+  }
+
+  if (!user) {
+    return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
+  }
+
+  const date = new Date(parsed.data.date);
+  if (!Number.isFinite(date.getTime())) {
+    return invalidInputResult({ date: ["Geçerli bir tarih seçin."] });
+  }
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update({
+      amount: parsed.data.amount,
+      type: parsed.data.type,
+      category: parsed.data.category,
+      date: date.toISOString(),
+    })
+    .eq("id", parsed.data.id)
+    .eq("user_id", user.id)
+    .select("id");
+
+  if (error) {
+    logger.error("updateTransaction.update failed", { code: error.code, message: error.message });
+    return { ok: false, message: "İşlem güncellenemedi. Lütfen tekrar deneyin." };
+  }
+
+  if (!data || data.length === 0) {
+    return { ok: false, message: "İşlem bulunamadı veya yetkiniz yok." };
+  }
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+
+  return { ok: true };
+}
+
+export async function deleteTransactionAction(
+  input: DeleteTransactionInput,
+): Promise<TransactionsActionResult> {
+  const parsed = deleteTransactionSchema.safeParse(input);
+  if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    logger.warn("deleteTransaction.getUser failed", { message: userError.message });
+  }
+
+  if (!user) {
+    return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
+  }
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", parsed.data.id)
+    .eq("user_id", user.id)
+    .select("id");
+
+  if (error) {
+    logger.error("deleteTransaction.delete failed", { code: error.code, message: error.message });
+    return { ok: false, message: "İşlem silinemedi. Lütfen tekrar deneyin." };
+  }
+
+  if (!data || data.length === 0) {
+    return { ok: false, message: "İşlem bulunamadı veya yetkiniz yok." };
   }
 
   revalidatePath("/transactions");

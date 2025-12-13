@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { calculateSmartBalance } from "@/features/dashboard/smart-balance";
 import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
+import TransactionHistory from "@/features/transactions/transaction-history";
 import { logger } from "@/lib/logger";
 import { toFiniteNumber } from "@/lib/number";
 import { isMissingTableError } from "@/lib/supabase/errors";
@@ -205,10 +206,22 @@ export default async function DashboardPage() {
             <Link className="text-foreground underline underline-offset-4" href="/transactions">
               İşlemler
             </Link>{" "}
-            sayfasından görüntüleyebilirsin. (Dashboard’a kronolojik liste + düzenle/sil eklenecek.)
+            sayfasından görüntüleyebilirsin.
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Şeffaf cüzdan geçmişi (Bu Ay)</CardTitle>
+          <Link className="text-sm underline underline-offset-4" href="/transactions">
+            Tümü
+          </Link>
+        </CardHeader>
+        <CardContent>
+          <TransactionHistory transactions={transactions.slice(0, 20)} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
