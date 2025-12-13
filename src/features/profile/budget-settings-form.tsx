@@ -66,27 +66,9 @@ export default function BudgetSettingsForm({
     });
   };
 
-  const handleAddExpense = React.useCallback(
-    (name: string, amount: number): string => {
-      // Optimistic update: add immediately with temporary ID
-      const tempId = `temp-${Date.now()}-${Math.random()}`;
-      const newExpense: FixedExpense = { id: tempId, name, amount };
-      setExpenses((prev) => [newExpense, ...prev]);
-      // Return the temp ID so it can be used for rollback on error.
-      return tempId;
-    },
-    [],
-  );
-
-  const handleAddError = React.useCallback((expenseId: string) => {
-    // Rollback: remove only the specific optimistically-added expense (handles duplicates safely).
-    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
-  }, []);
-
   const handleAddSuccess = React.useCallback(() => {
-    // Refresh to get real data from server (replaces temp IDs with real ones).
-    // Small delay avoids interfering with rapid consecutive inputs.
-    setTimeout(() => router.refresh(), 100);
+    // Refresh to get updated data from server
+    router.refresh();
   }, [router]);
 
   return (
@@ -123,11 +105,7 @@ export default function BudgetSettingsForm({
             toplamı hesaplar.
           </p>
           <div className="border-b pb-4">
-            <AddFixedExpenseForm
-              onAdd={handleAddExpense}
-              onError={handleAddError}
-              onSuccess={handleAddSuccess}
-            />
+            <AddFixedExpenseForm onSuccess={handleAddSuccess} />
           </div>
           <FixedExpensesList expenses={expenses} />
         </CardContent>

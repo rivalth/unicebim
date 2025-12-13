@@ -15,12 +15,10 @@ import {
 } from "@/features/fixed-expenses/schemas";
 
 type Props = {
-  onAdd?: (name: string, amount: number) => string | void;
-  onError?: (expenseId: string) => void;
   onSuccess?: () => void;
 };
 
-export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props) {
+export default function AddFixedExpenseForm({ onSuccess }: Props) {
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -33,42 +31,12 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
   });
 
   const onSubmit = (values: CreateFixedExpenseFormInput) => {
-    // IMPORTANT: `react-hook-form` may reuse/mutate the `values` object during `reset()`.
-    // Create a stable copy for optimistic UI + server action.
-    const payload: CreateFixedExpenseFormInput = { ...values };
-
     setServerError(null);
     form.clearErrors();
 
-    // Parse amount for optimistic update
-    const amountValue =
-      typeof payload.amount === "number"
-        ? payload.amount
-        : typeof payload.amount === "string"
-          ? Number(payload.amount.replace(",", "."))
-          : 0;
-
-    // Optimistic update: add immediately to list and get the temp ID
-    let tempExpenseId: string | undefined;
-    if (onAdd && Number.isFinite(amountValue) && amountValue > 0) {
-      const id = onAdd(payload.name, amountValue);
-      if (typeof id === "string") {
-        tempExpenseId = id;
-      }
-    }
-
-    // Reset form immediately (don't wait for server)
-    form.reset({ name: "", amount: "" }, { keepErrors: false });
-
-    // Submit to server in background
     startTransition(async () => {
-      const result = await createFixedExpenseAction(payload);
+      const result = await createFixedExpenseAction(values);
       if (!result.ok) {
-        // Rollback optimistic update on error using the specific temp ID
-        if (onError && tempExpenseId) {
-          onError(tempExpenseId);
-        }
-
         setServerError(result.message);
         const fieldErrors = result.fieldErrors ?? {};
         for (const [field, messages] of Object.entries(fieldErrors)) {
@@ -78,7 +46,8 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
         return;
       }
 
-      // Success: notify parent (it will refresh to get real IDs)
+      // Success: reset form and notify parent to refresh
+      form.reset({ name: "", amount: "" }, { keepErrors: false });
       onSuccess?.();
     });
   };
@@ -122,7 +91,7 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
 
       <Button type="submit" disabled={isPending}>
         <Plus className="size-4 mr-2" aria-hidden="true" />
-        {isPending ? "Ekleniyor..." : "Ekle"}
+        {isPending ? "Yükleniyor..." : "Ekle"}
       </Button>
     </form>
   );
