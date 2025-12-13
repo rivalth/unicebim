@@ -190,6 +190,19 @@ components:
       type: string
       enum: [income, expense]
 
+    TransactionCategory:
+      type: string
+      description: Hardcoded MVP categories (no custom categories).
+      enum:
+        - "KYK/Burs"
+        - "Aile Harçlığı"
+        - "Freelance/Ek İş"
+        - "Sosyal/Keyif"
+        - "Beslenme"
+        - "Ulaşım"
+        - "Sabitler"
+        - "Okul"
+
     Transaction:
       type: object
       required: [id, amount, type, category, date]
@@ -202,7 +215,7 @@ components:
         type:
           $ref: "#/components/schemas/TransactionType"
         category:
-          type: string
+          $ref: "#/components/schemas/TransactionCategory"
         date:
           type: string
           format: date-time
@@ -241,7 +254,7 @@ components:
         type:
           $ref: "#/components/schemas/TransactionType"
         category:
-          type: string
+          $ref: "#/components/schemas/TransactionCategory"
         date:
           type: string
           format: date
@@ -249,7 +262,7 @@ components:
 
     Profile:
       type: object
-      required: [id, full_name, monthly_budget_goal]
+      required: [id, full_name, monthly_budget_goal, monthly_fixed_expenses]
       properties:
         id:
           type: string
@@ -258,6 +271,9 @@ components:
           type: string
           nullable: true
         monthly_budget_goal:
+          type: number
+          nullable: true
+        monthly_fixed_expenses:
           type: number
           nullable: true
 
@@ -273,6 +289,9 @@ components:
       type: object
       properties:
         monthlyBudgetGoal:
+          type: number
+          nullable: true
+        monthlyFixedExpenses:
           type: number
           nullable: true
 
