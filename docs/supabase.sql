@@ -20,11 +20,18 @@ create table if not exists public.profiles (
 );
 
 -- If tables already exist, ensure new MVP columns are present.
+-- These ALTER statements are idempotent (safe to run multiple times).
 alter table public.profiles
   add column if not exists monthly_budget_goal numeric;
 
 alter table public.profiles
   add column if not exists monthly_fixed_expenses numeric;
+
+-- Verify columns exist (optional check - comment out if not needed)
+-- select column_name, data_type
+-- from information_schema.columns
+-- where table_schema = 'public' and table_name = 'profiles'
+--   and column_name in ('monthly_budget_goal', 'monthly_fixed_expenses');
 
 -- Transactions
 create table if not exists public.transactions (
