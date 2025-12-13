@@ -7,21 +7,30 @@ import { useRouter } from "next/navigation";
 
 import { updateMonthlyBudgetGoalAction } from "@/app/actions/transactions";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   type UpdateMonthlyBudgetGoalFormInput,
   updateMonthlyBudgetGoalSchema,
 } from "@/features/transactions/schemas";
+import AddFixedExpenseForm from "@/features/fixed-expenses/add-fixed-expense-form";
+import FixedExpensesList from "@/features/fixed-expenses/fixed-expenses-list";
+
+type FixedExpense = {
+  id: string;
+  name: string;
+  amount: number;
+};
 
 type Props = {
   initialMonthlyBudgetGoal: number | null;
-  initialMonthlyFixedExpenses: number | null;
+  fixedExpenses: FixedExpense[];
 };
 
 export default function BudgetSettingsForm({
   initialMonthlyBudgetGoal,
-  initialMonthlyFixedExpenses,
+  fixedExpenses,
 }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
@@ -35,10 +44,6 @@ export default function BudgetSettingsForm({
         initialMonthlyBudgetGoal == null || initialMonthlyBudgetGoal === 0
           ? ""
           : String(initialMonthlyBudgetGoal),
-      monthlyFixedExpenses:
-        initialMonthlyFixedExpenses == null || initialMonthlyFixedExpenses === 0
-          ? ""
-          : String(initialMonthlyFixedExpenses),
     },
   });
 
@@ -56,40 +61,45 @@ export default function BudgetSettingsForm({
   };
 
   return (
-    <form className="flex flex-col gap-3" onSubmit={form.handleSubmit(onSubmit)}>
-      <div className="grid gap-2">
-        <Label htmlFor="monthlyBudgetGoal">Aylık hedef bütçe (₺)</Label>
-        <Input
-          id="monthlyBudgetGoal"
-          inputMode="decimal"
-          placeholder="Örn: 5000"
-          {...form.register("monthlyBudgetGoal")}
-        />
-      </div>
+    <div className="space-y-6">
+      <form className="flex flex-col gap-3" onSubmit={form.handleSubmit(onSubmit)}>
+        <div className="grid gap-2">
+          <Label htmlFor="monthlyBudgetGoal">Aylık hedef bütçe (₺)</Label>
+          <Input
+            id="monthlyBudgetGoal"
+            inputMode="decimal"
+            placeholder="Örn: 5000"
+            {...form.register("monthlyBudgetGoal")}
+          />
+        </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="monthlyFixedExpenses">Aylık sabit giderler (₺)</Label>
-        <Input
-          id="monthlyFixedExpenses"
-          inputMode="decimal"
-          placeholder="Örn: 2200"
-          {...form.register("monthlyFixedExpenses")}
-        />
-        <p className="text-xs text-muted-foreground">
-          Kira/yurt, abonelikler ve telefon gibi sabit giderler için ayırdığın toplam tutar.
-        </p>
-      </div>
+        {serverError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {serverError}
+          </p>
+        ) : null}
 
-      {serverError ? (
-        <p className="text-sm text-destructive" role="alert">
-          {serverError}
-        </p>
-      ) : null}
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Kaydediliyor..." : "Kaydet"}
+        </Button>
+      </form>
 
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Kaydediliyor..." : "Kaydet"}
-      </Button>
-    </form>
+      <Card>
+        <CardHeader>
+          <CardTitle>Aylık sabit giderler</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Kira/yurt, abonelikler ve telefon gibi sabit giderlerini ekle. Sistem otomatik olarak
+            toplamı hesaplar.
+          </p>
+          <FixedExpensesList expenses={fixedExpenses} />
+          <div className="border-t pt-4">
+            <AddFixedExpenseForm />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

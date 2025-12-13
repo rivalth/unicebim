@@ -106,6 +106,19 @@ export default async function TransactionsPage({
     });
   }
 
+  const { data: fixedExpensesRaw, error: fixedExpensesError } = await supabase
+    .from("fixed_expenses")
+    .select("id, name, amount")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (fixedExpensesError) {
+    logger.warn("Transactions.fixed_expenses select failed", {
+      code: fixedExpensesError.code,
+      message: fixedExpensesError.message,
+    });
+  }
+
   const { data: txRaw, error: txError } = await supabase
     .from("transactions")
     .select("id, amount, type, category, date")
@@ -125,6 +138,7 @@ export default async function TransactionsPage({
   const missingTables: string[] = [];
   if (isMissingTableError(profileError)) missingTables.push("profiles");
   if (isMissingTableError(txError)) missingTables.push("transactions");
+  if (isMissingTableError(fixedExpensesError)) missingTables.push("fixed_expenses");
 
   if (missingTables.length > 0) {
     return (
@@ -252,7 +266,11 @@ export default async function TransactionsPage({
           <CardContent className="space-y-4">
             <BudgetSettingsForm
               initialMonthlyBudgetGoal={monthlyBudgetGoal}
-              initialMonthlyFixedExpenses={monthlyFixedExpenses}
+              fixedExpenses={(fixedExpensesRaw ?? []).map((e) => ({
+                id: e.id,
+                name: e.name,
+                amount: typeof e.amount === "number" ? e.amount : Number(e.amount),
+              }))}
             />
             {monthlyBudgetGoal != null ? (
               <p className="text-sm text-muted-foreground">

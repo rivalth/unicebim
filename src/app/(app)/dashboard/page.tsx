@@ -45,6 +45,19 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .maybeSingle();
 
+  const { data: fixedExpensesRaw, error: fixedExpensesError } = await supabase
+    .from("fixed_expenses")
+    .select("id, name, amount")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (fixedExpensesError) {
+    logger.warn("Dashboard.fixed_expenses select failed", {
+      code: fixedExpensesError.code,
+      message: fixedExpensesError.message,
+    });
+  }
+
   if (profileError) {
     logger.warn("Dashboard.profile select failed", {
       code: profileError.code,
@@ -68,7 +81,11 @@ export default async function DashboardPage() {
     logger.warn("Dashboard.transactions select failed", { code: txError.code, message: txError.message });
   }
 
-  if (isMissingTableError(profileError) || isMissingTableError(txError)) {
+  if (
+    isMissingTableError(profileError) ||
+    isMissingTableError(txError) ||
+    isMissingTableError(fixedExpensesError)
+  ) {
     return (
       <div className="space-y-6">
         <div>
@@ -138,7 +155,11 @@ export default async function DashboardPage() {
             </p>
             <BudgetSettingsForm
               initialMonthlyBudgetGoal={monthlyBudgetGoal}
-              initialMonthlyFixedExpenses={monthlyFixedExpenses}
+              fixedExpenses={(fixedExpensesRaw ?? []).map((e) => ({
+                id: e.id,
+                name: e.name,
+                amount: typeof e.amount === "number" ? e.amount : Number(e.amount),
+              }))}
             />
           </CardContent>
         </Card>

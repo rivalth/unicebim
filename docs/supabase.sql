@@ -33,6 +33,18 @@ alter table public.profiles
 -- where table_schema = 'public' and table_name = 'profiles'
 --   and column_name in ('monthly_budget_goal', 'monthly_fixed_expenses');
 
+-- Fixed Expenses (individual monthly fixed expenses)
+create table if not exists public.fixed_expenses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) not null,
+  name text not null,
+  amount numeric not null check (amount > 0),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists fixed_expenses_user_id_idx on public.fixed_expenses (user_id);
+create index if not exists fixed_expenses_user_id_created_at_idx on public.fixed_expenses (user_id, created_at desc);
+
 -- Transactions
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
@@ -48,6 +60,7 @@ create index if not exists transactions_user_id_date_idx on public.transactions 
 
 -- Row Level Security (RLS)
 alter table public.profiles enable row level security;
+alter table public.fixed_expenses enable row level security;
 alter table public.transactions enable row level security;
 
 -- Profiles policies
@@ -62,6 +75,23 @@ create policy "profiles_insert_own" on public.profiles
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
   for update using (auth.uid() = id);
+
+-- Fixed Expenses policies
+drop policy if exists "fixed_expenses_select_own" on public.fixed_expenses;
+create policy "fixed_expenses_select_own" on public.fixed_expenses
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "fixed_expenses_insert_own" on public.fixed_expenses;
+create policy "fixed_expenses_insert_own" on public.fixed_expenses
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "fixed_expenses_update_own" on public.fixed_expenses;
+create policy "fixed_expenses_update_own" on public.fixed_expenses
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "fixed_expenses_delete_own" on public.fixed_expenses;
+create policy "fixed_expenses_delete_own" on public.fixed_expenses
+  for delete using (auth.uid() = user_id);
 
 -- Transactions policies
 drop policy if exists "tx_select_own" on public.transactions;

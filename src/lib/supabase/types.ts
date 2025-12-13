@@ -41,6 +41,38 @@ export interface Database {
         };
         Relationships: [];
       };
+      fixed_expenses: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          amount: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          amount: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          amount?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fixed_expenses_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       transactions: {
         Row: {
           id: string;
