@@ -191,4 +191,3 @@ async function syncMonthlyFixedExpenses(userId: string): Promise<void> {
     });
   }
 }
-
