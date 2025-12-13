@@ -33,21 +33,25 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
   });
 
   const onSubmit = (values: CreateFixedExpenseFormInput) => {
+    // IMPORTANT: `react-hook-form` may reuse/mutate the `values` object during `reset()`.
+    // Create a stable copy for optimistic UI + server action.
+    const payload: CreateFixedExpenseFormInput = { ...values };
+
     setServerError(null);
     form.clearErrors();
 
     // Parse amount for optimistic update
     const amountValue =
-      typeof values.amount === "number"
-        ? values.amount
-        : typeof values.amount === "string"
-          ? Number(values.amount.replace(",", "."))
+      typeof payload.amount === "number"
+        ? payload.amount
+        : typeof payload.amount === "string"
+          ? Number(payload.amount.replace(",", "."))
           : 0;
 
     // Optimistic update: add immediately to list and get the temp ID
     let tempExpenseId: string | undefined;
     if (onAdd && Number.isFinite(amountValue) && amountValue > 0) {
-      const id = onAdd(values.name, amountValue);
+      const id = onAdd(payload.name, amountValue);
       if (typeof id === "string") {
         tempExpenseId = id;
       }
@@ -58,7 +62,7 @@ export default function AddFixedExpenseForm({ onAdd, onError, onSuccess }: Props
 
     // Submit to server in background
     startTransition(async () => {
-      const result = await createFixedExpenseAction(values);
+      const result = await createFixedExpenseAction(payload);
       if (!result.ok) {
         // Rollback optimistic update on error using the specific temp ID
         if (onError && tempExpenseId) {
