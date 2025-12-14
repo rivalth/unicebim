@@ -5,6 +5,8 @@ import { motion } from "motion/react";
 
 import { cn } from "@/lib/utils";
 
+type MotionDivProps = React.ComponentProps<typeof motion.div>;
+
 const cardVariants = {
   hidden: {
     opacity: 0,
@@ -16,13 +18,11 @@ const cardVariants = {
     scale: 1,
     y: 0,
   },
-};
+} satisfies NonNullable<MotionDivProps["variants"]>;
 
-interface CardProps extends React.ComponentProps<typeof motion.div> {
-  variants?: typeof cardVariants;
-  initial?: string | object;
-  animate?: string | object;
-}
+type CardProps = Omit<MotionDivProps, "variants"> & {
+  variants?: NonNullable<MotionDivProps["variants"]>;
+};
 
 function Card({ className, variants = cardVariants, initial = "hidden", animate = "visible", ...props }: CardProps) {
   return (
