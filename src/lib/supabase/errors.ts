@@ -23,4 +23,34 @@ export function isMissingTableError(
   );
 }
 
+/**
+ * Supabase/PostgREST error when an RPC function is missing.
+ *
+ * Common causes:
+ * - SQL migrations not applied (new function not created)
+ * - Schema cache not refreshed
+ */
+export function isMissingRpcFunctionError(
+  error: unknown,
+): error is { code: "PGRST202" | string; message: string } {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as PostgrestErrorLike).message === "string"
+  ) {
+    const msg = (error as PostgrestErrorLike).message!;
+    const code = "code" in error ? (error as PostgrestErrorLike).code : undefined;
+
+    if (code === "PGRST202") return true;
+
+    // Defensive fallback: PostgREST may return varying codes/messages depending on version.
+    if (msg.includes("Could not find the function") || msg.includes("function") && msg.includes("does not exist")) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 

@@ -110,7 +110,54 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      check_rate_limit: {
+        Args: {
+          p_key: string;
+          p_limit: number;
+          p_window_seconds: number;
+        };
+        Returns: boolean;
+      };
+      get_monthly_summary: {
+        Args: {
+          p_start: string;
+          p_end: string;
+        };
+        Returns: Array<{
+          income_total: number;
+          expense_total: number;
+          net_total: number;
+          fixed_expenses_paid: number;
+        }>;
+      };
+      get_transactions_page: {
+        Args: {
+          p_start: string;
+          p_end: string;
+          p_limit: number;
+          p_cursor_date?: string | null;
+          p_cursor_id?: string | null;
+        };
+        Returns: Array<{
+          id: string;
+          amount: number;
+          type: "income" | "expense";
+          category: string;
+          date: string;
+        }>;
+      };
+      get_expense_category_totals: {
+        Args: {
+          p_start: string;
+          p_end: string;
+        };
+        Returns: Array<{
+          category: string;
+          total: number;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

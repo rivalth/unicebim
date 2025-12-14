@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { envPublic } from "@/lib/env/public";
+import { getRequestId } from "@/lib/http/request-id";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -12,11 +13,20 @@ import type { Database } from "@/lib/supabase/types";
  * - Ensures `cookies()`-based Supabase clients see a valid session
  */
 export async function updateSupabaseSession(request: NextRequest) {
+  const requestId = getRequestId(request.headers);
+
+  const makeRequestHeaders = () => {
+    const h = new Headers(request.headers);
+    h.set("x-request-id", requestId);
+    return h;
+  };
+
   let response = NextResponse.next({
     request: {
-      headers: request.headers,
+      headers: makeRequestHeaders(),
     },
   });
+  response.headers.set("x-request-id", requestId);
 
   const supabase = createServerClient<Database>(
     envPublic.NEXT_PUBLIC_SUPABASE_URL,
@@ -31,9 +41,10 @@ export async function updateSupabaseSession(request: NextRequest) {
 
           response = NextResponse.next({
             request: {
-              headers: request.headers,
+              headers: makeRequestHeaders(),
             },
           });
+          response.headers.set("x-request-id", requestId);
 
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
