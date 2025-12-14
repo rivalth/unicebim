@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { CheckCircle2, LoaderCircle, TriangleAlert } from "lucide-react";
+import { headers } from "next/headers";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { logger } from "@/lib/logger";
+import { getRequestId } from "@/lib/http/request-id";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { safeRedirectPath } from "@/lib/url";
 
@@ -20,7 +22,16 @@ export default async function ConfirmingPage({
     | Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await Promise.resolve(searchParams);
-  const next = safeRedirectPath(typeof sp?.next === "string" ? sp.next : null);
+  const h = await headers();
+  const requestId = getRequestId(h);
+
+  const nextParam = typeof sp?.next === "string" ? sp.next : null;
+  const next = safeRedirectPath(nextParam, "/dashboard", (rejected) => {
+    logger.warn("auth.confirming.invalid_redirect", {
+      requestId,
+      next: rejected.slice(0, 256),
+    });
+  });
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -29,7 +40,7 @@ export default async function ConfirmingPage({
   } = await supabase.auth.getUser();
 
   if (error && error.message !== "Auth session missing!") {
-    logger.warn("Confirming.getUser failed", { message: error.message });
+    logger.warn("Confirming.getUser failed", { requestId, message: error.message });
   }
 
   return (

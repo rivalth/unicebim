@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { logger } from "@/lib/logger";
 import { envPublic } from "@/lib/env/public";
+import { getRequestId } from "@/lib/http/request-id";
 import type { Database } from "@/lib/supabase/types";
 import { safeRedirectPath } from "@/lib/url";
 
@@ -22,7 +23,15 @@ function isOtpType(value: string): value is OtpType {
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const next = safeRedirectPath(url.searchParams.get("next"));
+  const requestId = getRequestId(request.headers);
+
+  const nextParam = url.searchParams.get("next");
+  const next = safeRedirectPath(nextParam, "/dashboard", (rejected) => {
+    logger.warn("auth.callback.invalid_redirect", {
+      requestId,
+      next: rejected.slice(0, 256),
+    });
+  });
 
   const redirectUrl = new URL("/auth/confirming", url.origin);
   redirectUrl.searchParams.set("next", next);
@@ -55,6 +64,7 @@ export async function GET(request: NextRequest) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
         logger.warn("auth.callback.exchangeCodeForSession failed", {
+          requestId,
           code: error.code,
           message: error.message,
         });
@@ -69,13 +79,17 @@ export async function GET(request: NextRequest) {
       });
 
       if (error) {
-        logger.warn("auth.callback.verifyOtp failed", { code: error.code, message: error.message });
+        logger.warn("auth.callback.verifyOtp failed", {
+          requestId,
+          code: error.code,
+          message: error.message,
+        });
       }
 
       return response;
     }
   } catch (err) {
-    logger.error("auth.callback unexpected error", { err });
+    logger.error("auth.callback unexpected error", { requestId, err });
   }
 
   // Missing/invalid params: still show the confirming page which will guide the user.
