@@ -82,13 +82,51 @@ export async function loginAction(input: LoginInput): Promise<AuthActionResult> 
 
 async function resolveSiteUrl(): Promise<string | null> {
   const h = await headers();
-  const origin = h.get("origin");
-  if (origin && origin !== "null") return origin;
+  
+  // Priority 1: Use NEXT_PUBLIC_SITE_URL if set (most reliable for production)
+  // This ensures Vercel production deployments use the correct URL even if headers are incorrect
+  if (envPublic.NEXT_PUBLIC_SITE_URL) {
+    try {
+      const siteUrl = new URL(envPublic.NEXT_PUBLIC_SITE_URL);
+      logger.info("resolveSiteUrl.using_env", { url: siteUrl.origin });
+      return siteUrl.origin;
+    } catch {
+      // Invalid URL in env, fall through
+    }
+  }
 
+  // Priority 2: Use forwarded headers (Vercel proxy)
   const forwarded = getExpectedOriginFromHeaders(h);
-  if (forwarded) return forwarded;
+  if (forwarded && !forwarded.includes("localhost")) {
+    logger.info("resolveSiteUrl.using_forwarded", { url: forwarded });
+    return forwarded;
+  }
 
-  return envPublic.NEXT_PUBLIC_SITE_URL ? new URL(envPublic.NEXT_PUBLIC_SITE_URL).origin : null;
+  // Priority 3: Use origin header (only if not localhost)
+  const origin = h.get("origin");
+  if (origin && origin !== "null" && !origin.includes("localhost")) {
+    logger.info("resolveSiteUrl.using_origin", { url: origin });
+    return origin;
+  }
+
+  // Fallback: If we still have NEXT_PUBLIC_SITE_URL but failed to parse above, try direct use
+  if (envPublic.NEXT_PUBLIC_SITE_URL) {
+    logger.warn("resolveSiteUrl.fallback_to_env_direct", { 
+      raw: envPublic.NEXT_PUBLIC_SITE_URL 
+    });
+    // Return as-is if it looks like an origin (starts with http)
+    if (envPublic.NEXT_PUBLIC_SITE_URL.startsWith("http")) {
+      return envPublic.NEXT_PUBLIC_SITE_URL;
+    }
+  }
+
+  logger.warn("resolveSiteUrl.no_url_resolved", {
+    hasEnvUrl: !!envPublic.NEXT_PUBLIC_SITE_URL,
+    forwarded,
+    origin,
+  });
+
+  return null;
 }
 
 export async function registerAction(input: RegisterInput): Promise<AuthActionResult> {
