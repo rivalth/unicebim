@@ -12,6 +12,7 @@ export type Json =
  * Keep in sync with the SQL schema in Supabase:
  * - `profiles`
  * - `transactions`
+ * - `upcoming_payments`
  *
  * Note: Supabase/PostgREST may serialize some Postgres types (e.g. `numeric`)
  * as strings at runtime depending on configuration. We treat `numeric` fields as
@@ -162,6 +163,50 @@ export interface Database {
           },
         ];
       };
+      upcoming_payments: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          amount: number;
+          due_date: string;
+          is_paid: boolean;
+          paid_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          amount: number;
+          due_date: string;
+          is_paid?: boolean;
+          paid_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          amount?: number;
+          due_date?: string;
+          is_paid?: boolean;
+          paid_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "upcoming_payments_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -209,6 +254,29 @@ export interface Database {
         Returns: Array<{
           category: string;
           total: number;
+        }>;
+      };
+      get_unpaid_upcoming_payments_total: {
+        Args: {
+          p_user_id?: string | null;
+        };
+        Returns: number;
+      };
+      get_upcoming_payments_with_analysis: {
+        Args: {
+          p_user_id?: string | null;
+        };
+        Returns: Array<{
+          id: string;
+          name: string;
+          amount: number;
+          due_date: string;
+          is_paid: boolean;
+          paid_at: string | null;
+          created_at: string;
+          updated_at: string;
+          days_until_due: number;
+          total_unpaid_amount: number;
         }>;
       };
     };
