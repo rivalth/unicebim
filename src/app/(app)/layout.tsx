@@ -2,17 +2,12 @@ import { redirect } from "next/navigation";
 
 import Link from "next/link";
 
-import { logoutAction } from "@/app/actions/auth";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BottomNav } from "@/components/navigation/bottom-nav";

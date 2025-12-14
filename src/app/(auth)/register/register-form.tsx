@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
-import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 
@@ -14,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { type RegisterInput, registerSchema } from "@/features/auth/schemas";
 
 export default function RegisterForm() {
-  const router = useRouter();
   const [serverMessage, setServerMessage] = React.useState<string | null>(null);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -31,7 +29,8 @@ export default function RegisterForm() {
     },
   });
 
-  const onSubmit = (values: RegisterInput) => {
+  const onSubmit = React.useCallback(
+    (values: RegisterInput) => {
     setServerMessage(null);
     setServerError(null);
     form.clearErrors();
@@ -70,7 +69,9 @@ export default function RegisterForm() {
         setServerError("Bir hata oluştu. Lütfen tekrar deneyin.");
       }
     });
-  };
+    },
+    [form],
+  );
 
   const handleFormSubmit = React.useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {

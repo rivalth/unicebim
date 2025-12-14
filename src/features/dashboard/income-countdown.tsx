@@ -50,7 +50,6 @@ export function IncomeCountdown({ currentBalance, nextIncomeDate }: Props) {
   const isCritical = dailyLimit < 0;
   const isLow = dailyLimit >= 0 && dailyLimit < 50;
   const isMedium = dailyLimit >= 50 && dailyLimit < 100;
-  const isGood = dailyLimit >= 100;
 
   const statusColor = isCritical
     ? "text-destructive"
@@ -59,14 +58,6 @@ export function IncomeCountdown({ currentBalance, nextIncomeDate }: Props) {
       : isMedium
         ? "text-yellow-600"
         : "text-emerald-600";
-
-  const progressColor = isCritical
-    ? "bg-destructive"
-    : isLow
-      ? "bg-amber-500"
-      : isMedium
-        ? "bg-yellow-500"
-        : "bg-emerald-500";
 
   return (
     <div className="space-y-4 rounded-lg border bg-card p-4">

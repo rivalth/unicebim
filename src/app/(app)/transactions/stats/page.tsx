@@ -2,10 +2,8 @@ import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnimatedContainer } from "../animated-container";
-import { logger } from "@/lib/logger";
 import { formatTRY } from "@/lib/money";
 import { toFiniteNumber } from "@/lib/number";
-import { isMissingRpcFunctionError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import MonthPicker from "../month-picker";
 

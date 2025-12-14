@@ -2,17 +2,11 @@ import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnimatedContainer } from "./animated-container";
-import {
-  buildConicGradient,
-  getExpenseBreakdown,
-  getRealityCheckMessage,
-} from "@/features/dashboard/expense-breakdown";
 import { calculateSmartBalance } from "@/features/dashboard/smart-balance";
 import { MealIndex } from "@/features/dashboard/meal-index";
 import { IncomeCountdown } from "@/features/dashboard/income-countdown";
 import { SocialScore } from "@/features/dashboard/social-score";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
-import WalletsList from "@/features/wallets/wallets-list";
 import AddWalletForm from "@/features/wallets/add-wallet-form";
 import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
 import TransactionHistory from "@/features/transactions/transaction-history";
@@ -308,10 +302,6 @@ export default async function DashboardPage() {
       }));
     }
   }
-
-  const expenseBreakdown = getExpenseBreakdown(expenseBreakdownInput);
-  const expenseGradient = buildConicGradient(expenseBreakdown.slices);
-  const realityCheck = getRealityCheckMessage(expenseBreakdown.slices);
 
   // Map wallets data (handle numeric balance)
   const wallets: Array<{ id: string; name: string; balance: number; is_default: boolean }> =

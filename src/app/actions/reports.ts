@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { getCachedUser } from "@/lib/supabase/server";
-import { generateReportData, type ReportFilterOptions, type ReportSectionOptions } from "@/services/report.service";
+import { generateReportData, type ReportSectionOptions } from "@/services/report.service";
 import { enforceSameOriginForServerAction } from "@/lib/security/server-action";
 import { checkRateLimit, buildRateLimitKey, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
 import { logger } from "@/lib/logger";

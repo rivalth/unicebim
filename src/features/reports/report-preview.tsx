@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, FileText, FileJson, FileSpreadsheet } from "lucide-react";
+import { FileText, FileJson, FileSpreadsheet } from "lucide-react";
 import { formatTRY } from "@/lib/money";
 import { exportToJSON } from "@/lib/export/json";
 import { exportToCSV, flattenForCSV } from "@/lib/export/csv";

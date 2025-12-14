@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
-import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 
@@ -14,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { type LoginInput, loginSchema } from "@/features/auth/schemas";
 
 export default function LoginForm() {
-  const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [showPassword, setShowPassword] = React.useState(false);
@@ -27,7 +25,8 @@ export default function LoginForm() {
     },
   });
 
-  const onSubmit = (values: LoginInput) => {
+  const onSubmit = React.useCallback(
+    (values: LoginInput) => {
     setServerError(null);
     form.clearErrors();
 
@@ -63,7 +62,9 @@ export default function LoginForm() {
         setServerError("Bir hata oluştu. Lütfen tekrar deneyin.");
       }
     });
-  };
+    },
+    [form],
+  );
 
   const handleFormSubmit = React.useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {

@@ -80,7 +80,7 @@ export function ProfileForm({ initialFullName }: Props) {
           </p>
         ) : null}
         <p className="text-xs text-muted-foreground">
-          Görünen adın. Dashboard&apos;da &quot;Merhaba, {form.watch("full_name") || "Kullanıcı"}&quot;
+          Görünen adın. Dashboard&apos;da &quot;Merhaba, {form.getValues("full_name") || "Kullanıcı"}&quot;
           şeklinde gösterilir.
         </p>
       </div>

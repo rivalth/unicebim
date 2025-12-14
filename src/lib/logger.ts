@@ -4,8 +4,8 @@
 let Sentry: typeof import("@sentry/nextjs") | null = null;
 try {
   // Only import in server/edge runtime (where Sentry is available)
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   if (typeof window === "undefined") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     Sentry = require("@sentry/nextjs");
   }
 } catch {

@@ -9,9 +9,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-  defs,
-  linearGradient,
-  stop,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatTRY } from "@/lib/money";

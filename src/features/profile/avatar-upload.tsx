@@ -14,7 +14,7 @@ type AvatarUploadProps = {
   size?: "sm" | "md" | "lg" | "xl";
 };
 
-export function AvatarUpload({ currentAvatarUrl, fullName, userId, size = "xl" }: AvatarUploadProps) {
+export function AvatarUpload({ currentAvatarUrl, fullName, size = "xl" }: AvatarUploadProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(currentAvatarUrl ?? null);
   const [error, setError] = React.useState<string | null>(null);
@@ -57,7 +57,7 @@ export function AvatarUpload({ currentAvatarUrl, fullName, userId, size = "xl" }
           setPreviewUrl(result.avatarUrl);
         }
       }
-    } catch (err) {
+    } catch {
       setError("Yükleme sırasında bir hata oluştu.");
       setPreviewUrl(currentAvatarUrl ?? null);
     } finally {

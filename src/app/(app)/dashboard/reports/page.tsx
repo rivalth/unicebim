@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnimatedContainer } from "../animated-container";
 import { MonthlyTrendChart } from "@/features/charts/monthly-trend-chart";
 import { CategoryPieChart } from "@/features/charts/category-pie-chart";
@@ -6,10 +5,7 @@ import { DailyExpenseChart } from "@/features/charts/daily-expense-chart";
 import { IncomeExpenseComparisonChart } from "@/features/charts/income-expense-comparison-chart";
 import { NetBalanceChart } from "@/features/charts/net-balance-chart";
 import { WeeklyComparisonChart } from "@/features/charts/weekly-comparison-chart";
-import { logger } from "@/lib/logger";
-import { toFiniteNumber } from "@/lib/number";
 import { normalizeTransactionAmount } from "@/lib/supabase/mappers";
-import { isMissingRpcFunctionError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 
 export default async function DashboardReportsPage() {

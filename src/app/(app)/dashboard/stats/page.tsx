@@ -1,10 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnimatedContainer } from "../animated-container";
-import { logger } from "@/lib/logger";
 import { formatTRY } from "@/lib/money";
 import { toFiniteNumber } from "@/lib/number";
 import { mapProfileRow } from "@/lib/supabase/mappers";
-import { isMissingRpcFunctionError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 
 export default async function DashboardStatsPage() {
@@ -14,7 +12,6 @@ export default async function DashboardStatsPage() {
   const supabase = await createSupabaseServerClient();
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   // Get last 6 months for trend analysis
   const sixMonthsAgo = new Date(monthStart);
@@ -30,7 +27,6 @@ export default async function DashboardStatsPage() {
 
   const { data: profile } = profileResult;
   const normalizedProfile = mapProfileRow(profile);
-  const displayName = normalizedProfile?.full_name ?? null;
 
   // Get monthly summaries for each of the last 6 months
   const monthlyTrends = [];

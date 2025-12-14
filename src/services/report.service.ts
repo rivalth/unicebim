@@ -1,6 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { mapProfileRow, mapTransactionRow, normalizeTransactionAmount } from "@/lib/supabase/mappers";
-import { toFiniteNumber } from "@/lib/number";
+import { mapProfileRow, normalizeTransactionAmount } from "@/lib/supabase/mappers";
 import { logger } from "@/lib/logger";
 
 export type ReportFilterOptions = {
