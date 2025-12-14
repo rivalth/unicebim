@@ -26,11 +26,13 @@ type FixedExpense = {
 type Props = {
   initialMonthlyBudgetGoal: number | null;
   fixedExpenses: FixedExpense[];
+  monthlyFixedExpenses?: number | null; // DB-calculated total from profiles.monthly_fixed_expenses
 };
 
 export default function BudgetSettingsForm({
   initialMonthlyBudgetGoal,
   fixedExpenses: initialFixedExpenses,
+  monthlyFixedExpenses,
 }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
@@ -107,7 +109,7 @@ export default function BudgetSettingsForm({
           <div className="border-b pb-4">
             <AddFixedExpenseForm onSuccess={handleAddSuccess} />
           </div>
-          <FixedExpensesList expenses={expenses} />
+          <FixedExpensesList expenses={expenses} total={monthlyFixedExpenses} />
         </CardContent>
       </Card>
     </div>
