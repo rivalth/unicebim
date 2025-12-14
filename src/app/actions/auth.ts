@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 import { logger } from "@/lib/logger";
+import { envPublic } from "@/lib/env/public";
+import { getExpectedOriginFromHeaders } from "@/lib/security/csrf";
+import { checkRateLimit, buildRateLimitKey, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
+import { enforceSameOriginForServerAction } from "@/lib/security/server-action";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   type LoginInput,
@@ -37,6 +41,19 @@ function invalidInputResult(fieldErrors: FieldErrors): AuthActionResult {
 }
 
 export async function loginAction(input: LoginInput): Promise<AuthActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("loginAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "auth.login", ip }),
+    policy: rateLimitPolicies["auth.login"],
+    requestId: originCheck.requestId,
+    context: { action: "loginAction" },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
+
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -47,7 +64,7 @@ export async function loginAction(input: LoginInput): Promise<AuthActionResult> 
   });
 
   if (error) {
-    logger.warn("Login failed", { code: error.code, message: error.message });
+    logger.warn("Login failed", { requestId: originCheck.requestId, code: error.code, message: error.message });
     if (error.code === "email_not_confirmed") {
       return {
         ok: false,
@@ -66,10 +83,28 @@ export async function loginAction(input: LoginInput): Promise<AuthActionResult> 
 async function resolveSiteUrl(): Promise<string | null> {
   const h = await headers();
   const origin = h.get("origin");
-  return origin ?? process.env.NEXT_PUBLIC_SITE_URL ?? null;
+  if (origin && origin !== "null") return origin;
+
+  const forwarded = getExpectedOriginFromHeaders(h);
+  if (forwarded) return forwarded;
+
+  return envPublic.NEXT_PUBLIC_SITE_URL ? new URL(envPublic.NEXT_PUBLIC_SITE_URL).origin : null;
 }
 
 export async function registerAction(input: RegisterInput): Promise<AuthActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("registerAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "auth.register", ip }),
+    policy: rateLimitPolicies["auth.register"],
+    requestId: originCheck.requestId,
+    context: { action: "registerAction" },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
+
   const parsed = registerSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -89,7 +124,7 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
   });
 
   if (error) {
-    logger.warn("Register failed", { code: error.code, message: error.message });
+    logger.warn("Register failed", { requestId: originCheck.requestId, code: error.code, message: error.message });
     return { ok: false, message: "Kayıt işlemi tamamlanamadı." };
   }
 
@@ -114,6 +149,7 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
 
   if (profileError) {
     logger.warn("Profile upsert failed after register", {
+      requestId: originCheck.requestId,
       code: profileError.code,
       message: profileError.message,
     });
@@ -125,6 +161,26 @@ export async function registerAction(input: RegisterInput): Promise<AuthActionRe
 export async function resendConfirmationEmailAction(input: {
   email: string;
 }): Promise<AuthActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("resendConfirmationEmailAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "auth.resend", ip }),
+    policy: rateLimitPolicies["auth.resend"],
+    requestId: originCheck.requestId,
+    context: { action: "resendConfirmationEmailAction" },
+  });
+  if (!rl.ok) {
+    // Avoid account enumeration; keep messaging generic.
+    return {
+      ok: true,
+      message:
+        "Eğer bu e-posta ile kayıt varsa, doğrulama e-postası tekrar gönderildi. Gelen kutunu ve spam klasörünü kontrol et.",
+    };
+  }
+
   const parsed = resendConfirmationSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -140,6 +196,7 @@ export async function resendConfirmationEmailAction(input: {
 
   if (error) {
     logger.warn("Resend confirmation email failed", {
+      requestId: originCheck.requestId,
       code: error.code,
       message: error.message,
     });
@@ -154,11 +211,14 @@ export async function resendConfirmationEmailAction(input: {
 }
 
 export async function logoutAction() {
+  const originCheck = await enforceSameOriginForServerAction("logoutAction");
+  if (!originCheck.ok) redirect("/");
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    logger.error("Logout failed", { code: error.code, message: error.message });
+    logger.error("Logout failed", { requestId: originCheck.requestId, code: error.code, message: error.message });
   }
 
   redirect("/");

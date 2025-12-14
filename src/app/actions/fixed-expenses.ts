@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import {
   type CreateFixedExpenseFormInput,
@@ -11,6 +12,8 @@ import {
   updateFixedExpenseSchema,
 } from "@/features/fixed-expenses/schemas";
 import { logger } from "@/lib/logger";
+import { buildRateLimitKey, checkRateLimit, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
+import { enforceSameOriginForServerAction } from "@/lib/security/server-action";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type FieldErrors = Record<string, string[] | undefined>;
@@ -26,6 +29,9 @@ function invalidInputResult(fieldErrors: FieldErrors): FixedExpensesActionResult
 export async function createFixedExpenseAction(
   input: CreateFixedExpenseFormInput,
 ): Promise<FixedExpensesActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("createFixedExpenseAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = createFixedExpenseSchema.safeParse(input);
   if (!parsed.success) {
     return invalidInputResult(parsed.error.flatten().fieldErrors);
@@ -38,12 +44,25 @@ export async function createFixedExpenseAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("FixedExpenses.createFixedExpense.getUser failed", { message: userError.message });
+    logger.warn("FixedExpenses.createFixedExpense.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum açmanız gerekiyor." };
   }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "fixed_expenses.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["fixed_expenses.write"],
+    requestId: originCheck.requestId,
+    context: { action: "createFixedExpenseAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
   const { error } = await supabase.from("fixed_expenses").insert({
     user_id: user.id,
@@ -53,14 +72,12 @@ export async function createFixedExpenseAction(
 
   if (error) {
     logger.error("FixedExpenses.createFixedExpense.insert failed", {
+      requestId: originCheck.requestId,
       code: error.code,
       message: error.message,
     });
     return { ok: false, message: "Sabit gider eklenirken bir hata oluştu." };
   }
-
-  // Update profiles.monthly_fixed_expenses with sum of all fixed expenses
-  await syncMonthlyFixedExpenses(user.id);
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
@@ -70,6 +87,9 @@ export async function createFixedExpenseAction(
 export async function updateFixedExpenseAction(
   input: UpdateFixedExpenseFormInput,
 ): Promise<FixedExpensesActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("updateFixedExpenseAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = updateFixedExpenseSchema.safeParse(input);
   if (!parsed.success) {
     return invalidInputResult(parsed.error.flatten().fieldErrors);
@@ -82,12 +102,25 @@ export async function updateFixedExpenseAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("FixedExpenses.updateFixedExpense.getUser failed", { message: userError.message });
+    logger.warn("FixedExpenses.updateFixedExpense.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum açmanız gerekiyor." };
   }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "fixed_expenses.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["fixed_expenses.write"],
+    requestId: originCheck.requestId,
+    context: { action: "updateFixedExpenseAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
   const { error } = await supabase
     .from("fixed_expenses")
@@ -100,14 +133,12 @@ export async function updateFixedExpenseAction(
 
   if (error) {
     logger.error("FixedExpenses.updateFixedExpense.update failed", {
+      requestId: originCheck.requestId,
       code: error.code,
       message: error.message,
     });
     return { ok: false, message: "Sabit gider güncellenirken bir hata oluştu." };
   }
-
-  // Update profiles.monthly_fixed_expenses with sum of all fixed expenses
-  await syncMonthlyFixedExpenses(user.id);
 
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
@@ -117,6 +148,9 @@ export async function updateFixedExpenseAction(
 export async function deleteFixedExpenseAction(
   input: DeleteFixedExpenseInput,
 ): Promise<FixedExpensesActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("deleteFixedExpenseAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = deleteFixedExpenseSchema.safeParse(input);
   if (!parsed.success) {
     return invalidInputResult(parsed.error.flatten().fieldErrors);
@@ -129,12 +163,25 @@ export async function deleteFixedExpenseAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("FixedExpenses.deleteFixedExpense.getUser failed", { message: userError.message });
+    logger.warn("FixedExpenses.deleteFixedExpense.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum açmanız gerekiyor." };
   }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "fixed_expenses.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["fixed_expenses.write"],
+    requestId: originCheck.requestId,
+    context: { action: "deleteFixedExpenseAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
   const { error } = await supabase
     .from("fixed_expenses")
@@ -144,50 +191,14 @@ export async function deleteFixedExpenseAction(
 
   if (error) {
     logger.error("FixedExpenses.deleteFixedExpense.delete failed", {
+      requestId: originCheck.requestId,
       code: error.code,
       message: error.message,
     });
     return { ok: false, message: "Sabit gider silinirken bir hata oluştu." };
   }
 
-  // Update profiles.monthly_fixed_expenses with sum of all fixed expenses
-  await syncMonthlyFixedExpenses(user.id);
-
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   return { ok: true };
-}
-
-/**
- * Sync profiles.monthly_fixed_expenses with sum of all fixed_expenses for a user.
- */
-async function syncMonthlyFixedExpenses(userId: string): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-
-  const { data: expenses, error: selectError } = await supabase
-    .from("fixed_expenses")
-    .select("amount")
-    .eq("user_id", userId);
-
-  if (selectError) {
-    logger.error("FixedExpenses.syncMonthlyFixedExpenses.select failed", {
-      code: selectError.code,
-      message: selectError.message,
-    });
-    return;
-  }
-
-  const total = expenses.reduce((sum, e) => sum + (typeof e.amount === "number" ? e.amount : Number(e.amount)), 0);
-
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ monthly_fixed_expenses: total })
-    .eq("id", userId);
-
-  if (updateError) {
-    logger.error("FixedExpenses.syncMonthlyFixedExpenses.update failed", {
-      code: updateError.code,
-      message: updateError.message,
-    });
-  }
 }

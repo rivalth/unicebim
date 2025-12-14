@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { logger } from "@/lib/logger";
+import { buildRateLimitKey, checkRateLimit, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
+import { enforceSameOriginForServerAction } from "@/lib/security/server-action";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import {
@@ -29,6 +32,9 @@ function invalidInputResult(fieldErrors: FieldErrors): TransactionsActionResult 
 export async function createTransactionAction(
   input: CreateTransactionFormInput,
 ): Promise<TransactionsActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("createTransactionAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = createTransactionSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -39,12 +45,25 @@ export async function createTransactionAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("createTransaction.getUser failed", { message: userError.message });
+    logger.warn("createTransaction.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "tx.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["tx.write"],
+    requestId: originCheck.requestId,
+    context: { action: "createTransactionAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
   const date = new Date(parsed.data.date);
   if (!Number.isFinite(date.getTime())) {
@@ -61,6 +80,7 @@ export async function createTransactionAction(
 
   if (insertError) {
     logger.error("createTransaction.insert failed", {
+      requestId: originCheck.requestId,
       code: insertError.code,
       message: insertError.message,
     });
@@ -76,6 +96,9 @@ export async function createTransactionAction(
 export async function updateMonthlyBudgetGoalAction(
   input: UpdateMonthlyBudgetGoalFormInput,
 ): Promise<TransactionsActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("updateMonthlyBudgetGoalAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = updateMonthlyBudgetGoalSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -86,21 +109,30 @@ export async function updateMonthlyBudgetGoalAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("updateMonthlyBudgetGoal.getUser failed", { message: userError.message });
+    logger.warn("updateMonthlyBudgetGoal.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
 
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "profile.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["profile.write"],
+    requestId: originCheck.requestId,
+    context: { action: "updateMonthlyBudgetGoalAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
+
   const updates: Database["public"]["Tables"]["profiles"]["Update"] = {};
   if (parsed.data.monthlyBudgetGoal !== undefined) {
     updates.monthly_budget_goal =
       parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
-  }
-  if (parsed.data.monthlyFixedExpenses !== undefined) {
-    updates.monthly_fixed_expenses =
-      parsed.data.monthlyFixedExpenses == null ? null : parsed.data.monthlyFixedExpenses;
   }
 
   if (Object.keys(updates).length === 0) return { ok: true };
@@ -112,6 +144,7 @@ export async function updateMonthlyBudgetGoalAction(
 
   if (updateError) {
     logger.error("updateMonthlyBudgetGoal.update failed", {
+      requestId: originCheck.requestId,
       code: updateError.code,
       message: updateError.message,
     });
@@ -127,6 +160,9 @@ export async function updateMonthlyBudgetGoalAction(
 export async function updateTransactionAction(
   input: UpdateTransactionFormInput,
 ): Promise<TransactionsActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("updateTransactionAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = updateTransactionSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -137,12 +173,25 @@ export async function updateTransactionAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("updateTransaction.getUser failed", { message: userError.message });
+    logger.warn("updateTransaction.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "tx.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["tx.write"],
+    requestId: originCheck.requestId,
+    context: { action: "updateTransactionAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
   const date = new Date(parsed.data.date);
   if (!Number.isFinite(date.getTime())) {
@@ -162,7 +211,11 @@ export async function updateTransactionAction(
     .select("id");
 
   if (error) {
-    logger.error("updateTransaction.update failed", { code: error.code, message: error.message });
+    logger.error("updateTransaction.update failed", {
+      requestId: originCheck.requestId,
+      code: error.code,
+      message: error.message,
+    });
     return { ok: false, message: "İşlem güncellenemedi. Lütfen tekrar deneyin." };
   }
 
@@ -179,6 +232,9 @@ export async function updateTransactionAction(
 export async function deleteTransactionAction(
   input: DeleteTransactionInput,
 ): Promise<TransactionsActionResult> {
+  const originCheck = await enforceSameOriginForServerAction("deleteTransactionAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
   const parsed = deleteTransactionSchema.safeParse(input);
   if (!parsed.success) return invalidInputResult(parsed.error.flatten().fieldErrors);
 
@@ -189,12 +245,25 @@ export async function deleteTransactionAction(
   } = await supabase.auth.getUser();
 
   if (userError) {
-    logger.warn("deleteTransaction.getUser failed", { message: userError.message });
+    logger.warn("deleteTransaction.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
   }
 
   if (!user) {
     return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
   }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "tx.write", ip, userId: user.id }),
+    policy: rateLimitPolicies["tx.write"],
+    requestId: originCheck.requestId,
+    context: { action: "deleteTransactionAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
   const { data, error } = await supabase
     .from("transactions")
@@ -204,7 +273,11 @@ export async function deleteTransactionAction(
     .select("id");
 
   if (error) {
-    logger.error("deleteTransaction.delete failed", { code: error.code, message: error.message });
+    logger.error("deleteTransaction.delete failed", {
+      requestId: originCheck.requestId,
+      code: error.code,
+      message: error.message,
+    });
     return { ok: false, message: "İşlem silinemedi. Lütfen tekrar deneyin." };
   }
 
