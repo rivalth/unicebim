@@ -1,103 +1,91 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
 import { logger } from "@/lib/logger";
-import { toFiniteNumber } from "@/lib/number";
-import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
+import { readJsonBody } from "@/lib/http/request";
+import { getRequestId } from "@/lib/http/request-id";
+import {
+  badRequest,
+  forbidden,
+  internalError,
+  invalidPayload,
+  jsonOk,
+  unauthorized,
+} from "@/lib/http/response";
+import { isSameOriginRequest } from "@/lib/security/csrf";
+import { buildRateLimitKey, enforceRateLimit, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
+import { getProfile, updateProfile } from "@/services/profile.service";
 import type { Database } from "@/lib/supabase/types";
 import { updateMonthlyBudgetGoalSchema } from "@/features/transactions/schemas";
 
-export async function GET() {
-  const user = await getCachedUser();
+export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request.headers);
+  const profile = await getProfile(requestId);
 
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (!profile) {
+    return unauthorized(requestId);
   }
 
-  const supabase = await createSupabaseServerClient();
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    logger.error("api.profile.select failed", { code: error.code, message: error.message });
-    return NextResponse.json({ message: "Failed to fetch profile" }, { status: 500 });
-  }
-
-  const profile = data
-    ? {
-        ...data,
-        monthly_budget_goal: toFiniteNumber(
-          (data as unknown as { monthly_budget_goal?: unknown }).monthly_budget_goal,
-        ),
-        monthly_fixed_expenses: toFiniteNumber(
-          (data as unknown as { monthly_fixed_expenses?: unknown }).monthly_fixed_expenses,
-        ),
-      }
-    : null;
-
-  return NextResponse.json({ profile });
+  const res = jsonOk({ profile }, requestId);
+  res.headers.set("cache-control", "no-store");
+  return res;
 }
 
 export async function PATCH(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  const parsed = updateMonthlyBudgetGoalSchema.safeParse(body);
+  const requestId = getRequestId(request.headers);
+
+  const expectedOrigin = new URL(request.url).origin;
+  if (!isSameOriginRequest({ headers: request.headers, expectedOrigin })) {
+    logger.warn("csrf.blocked", {
+      requestId,
+      route: "/api/profile",
+      origin: request.headers.get("origin"),
+      referer: request.headers.get("referer"),
+    });
+    return forbidden(requestId);
+  }
+
+  const body = await readJsonBody(request, { requestId });
+  if (!body.ok) return body.response;
+
+  const parsed = updateMonthlyBudgetGoalSchema.safeParse(body.data);
   if (!parsed.success) {
-    return NextResponse.json(
-      { message: "Invalid payload", issues: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
+    return invalidPayload(requestId, parsed.error.flatten().fieldErrors);
   }
 
-  const user = await getCachedUser();
-
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  // Check if user exists by trying to get profile
+  const existingProfile = await getProfile(requestId);
+  if (!existingProfile) {
+    return unauthorized(requestId);
   }
 
-  const supabase = await createSupabaseServerClient();
+  const ip = getClientIp(request.headers);
+  const rl = await enforceRateLimit({
+    key: buildRateLimitKey({ scope: "profile.write", ip, userId: existingProfile.id }),
+    policy: rateLimitPolicies["profile.write"],
+    requestId,
+    context: { route: "/api/profile", userId: existingProfile.id },
+  });
+  if (!rl.ok) return rl.response;
 
   const updates: Database["public"]["Tables"]["profiles"]["Update"] = {};
   if (parsed.data.monthlyBudgetGoal !== undefined) {
     updates.monthly_budget_goal =
       parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
   }
-  if (parsed.data.monthlyFixedExpenses !== undefined) {
-    updates.monthly_fixed_expenses =
-      parsed.data.monthlyFixedExpenses == null ? null : parsed.data.monthlyFixedExpenses;
-  }
 
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ profile: null }, { status: 400 });
+    return badRequest(requestId, "No fields to update");
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .update(updates)
-    .eq("id", user.id)
-    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
-    .maybeSingle();
+  const profile = await updateProfile(updates, requestId);
 
-  if (error) {
-    logger.error("api.profile.update failed", { code: error.code, message: error.message });
-    return NextResponse.json({ message: "Failed to update profile" }, { status: 500 });
+  if (!profile) {
+    return internalError(requestId, "Failed to update profile");
   }
 
-  const profile = data
-    ? {
-        ...data,
-        monthly_budget_goal: toFiniteNumber(
-          (data as unknown as { monthly_budget_goal?: unknown }).monthly_budget_goal,
-        ),
-        monthly_fixed_expenses: toFiniteNumber(
-          (data as unknown as { monthly_fixed_expenses?: unknown }).monthly_fixed_expenses,
-        ),
-      }
-    : null;
-
-  return NextResponse.json({ profile });
+  const res = jsonOk({ profile }, requestId);
+  res.headers.set("cache-control", "no-store");
+  return res;
 }
 
 
