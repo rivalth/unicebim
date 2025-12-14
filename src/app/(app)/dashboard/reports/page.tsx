@@ -6,6 +6,7 @@ import { IncomeExpenseComparisonChart } from "@/features/charts/income-expense-c
 import { NetBalanceChart } from "@/features/charts/net-balance-chart";
 import { WeeklyComparisonChart } from "@/features/charts/weekly-comparison-chart";
 import { normalizeTransactionAmount } from "@/lib/supabase/mappers";
+import { toFiniteNumber } from "@/lib/number";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 
 export default async function DashboardReportsPage() {
