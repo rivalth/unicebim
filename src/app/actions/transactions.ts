@@ -134,6 +134,12 @@ export async function updateMonthlyBudgetGoalAction(
     updates.monthly_budget_goal =
       parsed.data.monthlyBudgetGoal == null ? null : parsed.data.monthlyBudgetGoal;
   }
+  if (parsed.data.nextIncomeDate !== undefined) {
+    updates.next_income_date = parsed.data.nextIncomeDate == null ? null : parsed.data.nextIncomeDate;
+  }
+  if (parsed.data.mealPrice !== undefined) {
+    updates.meal_price = parsed.data.mealPrice == null ? null : parsed.data.mealPrice;
+  }
 
   if (Object.keys(updates).length === 0) return { ok: true };
 

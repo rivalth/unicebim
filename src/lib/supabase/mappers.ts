@@ -17,8 +17,16 @@ export function mapProfileRow(
   full_name: string | null;
   monthly_budget_goal: number | null;
   monthly_fixed_expenses: number | null;
+  meal_price: number | null;
+  next_income_date: string | null;
+  avatar_url: string | null;
 } | null {
   if (!row) return null;
+
+  // Handle next_income_date (date type from Postgres)
+  const rawDate = (row as unknown as { next_income_date?: string | null }).next_income_date;
+  const nextIncomeDate =
+    rawDate && typeof rawDate === "string" ? rawDate : rawDate === null ? null : String(rawDate || null);
 
   return {
     id: row.id,
@@ -29,6 +37,9 @@ export function mapProfileRow(
     monthly_fixed_expenses: toFiniteNumber(
       (row as unknown as { monthly_fixed_expenses?: unknown }).monthly_fixed_expenses,
     ),
+    meal_price: toFiniteNumber((row as unknown as { meal_price?: unknown }).meal_price),
+    next_income_date: nextIncomeDate,
+    avatar_url: row.avatar_url ?? null,
   };
 }
 

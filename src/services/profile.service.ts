@@ -10,6 +10,8 @@ export type ProfileData = {
   full_name: string | null;
   monthly_budget_goal: number | null;
   monthly_fixed_expenses: number | null;
+  meal_price: number | null;
+  next_income_date: string | null;
 };
 
 /**
@@ -28,7 +30,7 @@ export async function getProfile(requestId: string): Promise<ProfileData | null>
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
+    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -66,7 +68,7 @@ export async function updateProfile(
     .from("profiles")
     .update(updates)
     .eq("id", user.id)
-    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
+    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date")
     .maybeSingle();
 
   if (error) {

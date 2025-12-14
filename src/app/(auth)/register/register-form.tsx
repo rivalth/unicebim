@@ -34,27 +34,55 @@ export default function RegisterForm() {
   const onSubmit = (values: RegisterInput) => {
     setServerMessage(null);
     setServerError(null);
+    form.clearErrors();
 
     startTransition(async () => {
-      const result = await registerAction(values);
+      try {
+        const result = await registerAction(values);
 
-      if (!result.ok) {
-        setServerError(result.message);
-        const fieldErrors = result.fieldErrors ?? {};
-        for (const [field, messages] of Object.entries(fieldErrors)) {
-          if (!messages?.length) continue;
-          form.setError(field as keyof RegisterInput, { message: messages[0] });
+        if (!result.ok) {
+          // Handle field-level errors
+          const fieldErrors = result.fieldErrors ?? {};
+          for (const [field, messages] of Object.entries(fieldErrors)) {
+            if (!messages?.length) continue;
+            form.setError(field as keyof RegisterInput, { message: messages[0] });
+          }
+
+          // Show server error message
+          setServerError(result.message);
+          return;
         }
-        return;
-      }
 
-      if (result.message) setServerMessage(result.message);
-      router.push(result.redirectTo ?? "/dashboard");
+        // Handle success message (e.g., email confirmation required)
+        if (result.message) {
+          setServerMessage(result.message);
+        }
+
+        // Successful registration: use full page reload for redirects
+        // This ensures auth state is properly refreshed
+        if (result.redirectTo) {
+          window.location.href = result.redirectTo;
+          return;
+        }
+      } catch (error) {
+        // Handle unexpected errors (network, etc.)
+        console.error("Register error:", error);
+        setServerError("Bir hata oluştu. Lütfen tekrar deneyin.");
+      }
     });
   };
 
+  const handleFormSubmit = React.useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      form.handleSubmit(onSubmit)(e);
+    },
+    [form, onSubmit],
+  );
+
   return (
-    <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+    <form className="space-y-4" method="post" onSubmit={handleFormSubmit}>
       <div className="space-y-2">
         <Label htmlFor="fullName">Ad Soyad</Label>
         <Input id="fullName" autoComplete="name" {...form.register("fullName")} />
@@ -155,9 +183,13 @@ export default function RegisterForm() {
         </p>
       ) : null}
 
-      <Button className="w-full" type="submit" disabled={isPending}>
+      <button
+        type="submit"
+        disabled={isPending}
+        className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+      >
         {isPending ? "Kayıt oluşturuluyor..." : "Kayıt ol"}
-      </Button>
+      </button>
 
       <p className="text-center text-sm text-muted-foreground">
         Zaten hesabın var mı?{" "}

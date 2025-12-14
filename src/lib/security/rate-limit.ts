@@ -17,7 +17,9 @@ export type RateLimitScope =
   | "auth.resend"
   | "tx.write"
   | "profile.write"
-  | "fixed_expenses.write";
+  | "fixed_expenses.write"
+  | "wallets.write"
+  | "report.generate";
 
 export const rateLimitPolicies: Record<RateLimitScope, RateLimitPolicy> = {
   "auth.login": { limit: 10, windowSeconds: 60 },
@@ -26,6 +28,8 @@ export const rateLimitPolicies: Record<RateLimitScope, RateLimitPolicy> = {
   "tx.write": { limit: 60, windowSeconds: 60 },
   "profile.write": { limit: 20, windowSeconds: 60 },
   "fixed_expenses.write": { limit: 30, windowSeconds: 60 },
+  "wallets.write": { limit: 30, windowSeconds: 60 },
+  "report.generate": { limit: 10, windowSeconds: 3600 }, // 10 reports per hour
 };
 
 let warnedMissingRateLimitRpc = false;

@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import * as React from "react";
 import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 
 const containerVariants = {
@@ -20,9 +21,15 @@ interface AnimatedContainerProps {
 }
 
 export function AnimatedContainer({ children, className }: AnimatedContainerProps) {
+  const [mounted, setMounted] = React.useState(false);
   const reduceMotion = usePrefersReducedMotion();
 
-  if (reduceMotion) {
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // During SSR and initial hydration, render without animation to prevent flash
+  if (!mounted || reduceMotion) {
     return <div className={className}>{children}</div>;
   }
 

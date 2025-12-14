@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import * as React from "react";
 import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 
 const pageVariants = {
@@ -29,9 +30,15 @@ export default function AppTemplate({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [mounted, setMounted] = React.useState(false);
   const reduceMotion = usePrefersReducedMotion();
 
-  if (reduceMotion) {
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // During SSR and initial hydration, render without animation to prevent flash
+  if (!mounted || reduceMotion) {
     return <div>{children}</div>;
   }
 

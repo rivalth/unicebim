@@ -26,18 +26,27 @@ export interface Database {
           full_name: string | null;
           monthly_budget_goal: number | null;
           monthly_fixed_expenses: number | null;
+          meal_price: number | null;
+          next_income_date: string | null;
+          avatar_url: string | null;
         };
         Insert: {
           id: string;
           full_name?: string | null;
           monthly_budget_goal?: number | null;
           monthly_fixed_expenses?: number | null;
+          meal_price?: number | null;
+          next_income_date?: string | null;
+          avatar_url?: string | null;
         };
         Update: {
           id?: string;
           full_name?: string | null;
           monthly_budget_goal?: number | null;
           monthly_fixed_expenses?: number | null;
+          meal_price?: number | null;
+          next_income_date?: string | null;
+          avatar_url?: string | null;
         };
         Relationships: [];
       };
@@ -73,6 +82,41 @@ export interface Database {
           },
         ];
       };
+      wallets: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          balance: number;
+          is_default: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          balance?: number;
+          is_default?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          balance?: number;
+          is_default?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wallets_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       transactions: {
         Row: {
           id: string;
@@ -81,6 +125,7 @@ export interface Database {
           type: "income" | "expense";
           category: string;
           date: string;
+          wallet_id: string | null;
         };
         Insert: {
           id?: string;
@@ -89,6 +134,7 @@ export interface Database {
           type: "income" | "expense";
           category: string;
           date?: string;
+          wallet_id?: string | null;
         };
         Update: {
           id?: string;
@@ -97,6 +143,7 @@ export interface Database {
           type?: "income" | "expense";
           category?: string;
           date?: string;
+          wallet_id?: string | null;
         };
         Relationships: [
           {
@@ -104,6 +151,13 @@ export interface Database {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transactions_wallet_id_fkey";
+            columns: ["wallet_id"];
+            isOneToOne: false;
+            referencedRelation: "wallets";
             referencedColumns: ["id"];
           },
         ];

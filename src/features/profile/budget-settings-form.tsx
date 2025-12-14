@@ -25,12 +25,16 @@ type FixedExpense = {
 
 type Props = {
   initialMonthlyBudgetGoal: number | null;
+  initialNextIncomeDate: string | null;
+  initialMealPrice: number | null;
   fixedExpenses: FixedExpense[];
   monthlyFixedExpenses?: number | null; // DB-calculated total from profiles.monthly_fixed_expenses
 };
 
 export default function BudgetSettingsForm({
   initialMonthlyBudgetGoal,
+  initialNextIncomeDate,
+  initialMealPrice,
   fixedExpenses: initialFixedExpenses,
   monthlyFixedExpenses,
 }: Props) {
@@ -52,6 +56,8 @@ export default function BudgetSettingsForm({
         initialMonthlyBudgetGoal == null || initialMonthlyBudgetGoal === 0
           ? ""
           : String(initialMonthlyBudgetGoal),
+      nextIncomeDate: initialNextIncomeDate ?? "",
+      mealPrice: initialMealPrice == null || initialMealPrice === 0 ? "" : String(initialMealPrice),
     },
   });
 
@@ -75,7 +81,7 @@ export default function BudgetSettingsForm({
 
   return (
     <div className="space-y-6">
-      <form className="flex flex-col gap-3" onSubmit={form.handleSubmit(onSubmit)}>
+      <form className="flex flex-col gap-4" onSubmit={form.handleSubmit(onSubmit)}>
         <div className="grid gap-2">
           <Label htmlFor="monthlyBudgetGoal">Aylık hedef bütçe (₺)</Label>
           <Input
@@ -84,6 +90,47 @@ export default function BudgetSettingsForm({
             placeholder="Örn: 5000"
             {...form.register("monthlyBudgetGoal")}
           />
+          {form.formState.errors.monthlyBudgetGoal?.message ? (
+            <p className="text-sm text-destructive" role="alert">
+              {form.formState.errors.monthlyBudgetGoal.message}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="nextIncomeDate">Bir sonraki gelir/burs tarihi</Label>
+          <Input
+            id="nextIncomeDate"
+            type="date"
+            {...form.register("nextIncomeDate")}
+            min={new Date().toISOString().split("T")[0]}
+          />
+          <p className="text-xs text-muted-foreground">
+            Burs veya gelir gününü seç. Dashboard&apos;da günlük harcama limiti hesaplanır.
+          </p>
+          {form.formState.errors.nextIncomeDate?.message ? (
+            <p className="text-sm text-destructive" role="alert">
+              {form.formState.errors.nextIncomeDate.message}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="mealPrice">Yemekhane öğün fiyatı (₺)</Label>
+          <Input
+            id="mealPrice"
+            inputMode="decimal"
+            placeholder="Örn: 15"
+            {...form.register("mealPrice")}
+          />
+          <p className="text-xs text-muted-foreground">
+            Okulda bir öğün yemeğin fiyatı. Dashboard&apos;da bakiyeni &quot;kaç öğün yemek&quot; olarak görebilirsin.
+          </p>
+          {form.formState.errors.mealPrice?.message ? (
+            <p className="text-sm text-destructive" role="alert">
+              {form.formState.errors.mealPrice.message}
+            </p>
+          ) : null}
         </div>
 
         {serverError ? (

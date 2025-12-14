@@ -1,20 +1,24 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "img-src 'self' data: blob:",
+  // Allow images from same origin, data URIs, blob URIs, and Supabase Storage
+  "img-src 'self' data: blob: https://*.supabase.co",
   "font-src 'self' data:",
   // Next.js and CSS-in-JS/font pipelines can rely on inline styles.
   "style-src 'self' 'unsafe-inline'",
   // Dev tooling may rely on eval; keep it disabled in production.
+  // Next.js Turbopack requires 'unsafe-inline' for inline scripts in dev mode
   process.env.NODE_ENV === "production"
     ? "script-src 'self'"
-    : "script-src 'self' 'unsafe-eval'",
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
   // Supabase (Auth + PostgREST) runs over HTTPS/WSS.
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  // Sentry error tracking (only when DSN is configured)
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io",
 ].join("; ");
 
 const securityHeaders = [
@@ -39,6 +43,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: true,
+  devIndicators: false,
   async headers() {
     return [
       {
@@ -49,4 +54,25 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap Next.js config with Sentry if DSN is configured
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      // Sentry options
+      silent: true, // Suppresses source map uploading logs during build
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      // Only upload source maps in production builds
+      widenClientFileUpload: true,
+      tunnelRoute: "/monitoring",
+      sourcemaps: {
+        disable: true,
+      },
+      // Webpack options (moved from deprecated top-level options)
+      webpack: {
+        treeshake: {
+          removeDebugLogging: true,
+        },
+        automaticVercelMonitors: true,
+      },
+    })
+  : nextConfig;

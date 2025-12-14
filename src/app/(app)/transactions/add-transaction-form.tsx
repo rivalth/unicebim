@@ -18,12 +18,13 @@ import {
 
 type Props = {
   defaultDate: string; // YYYY-MM-DD
+  onSuccess?: () => void; // Optional callback when transaction is successfully created
 };
 
 const DEFAULT_EXPENSE_CATEGORY: TransactionCategory = "Beslenme";
 const DEFAULT_INCOME_CATEGORY: TransactionCategory = "KYK/Burs";
 
-export default function AddTransactionForm({ defaultDate }: Props) {
+export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -79,6 +80,8 @@ export default function AddTransactionForm({ defaultDate }: Props) {
         date: defaultDate,
       });
       router.refresh();
+      // Call onSuccess callback if provided (e.g., to close modal)
+      onSuccess?.();
     });
   };
 

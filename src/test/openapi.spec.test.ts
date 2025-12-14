@@ -91,6 +91,114 @@ describe("OpenAPI spec drift", () => {
 
     expect(names).toEqual(expect.arrayContaining(["limit", "cursor"]));
   });
+
+  it("health endpoint returns uptime and runtime information", () => {
+    const spec = loadSpec();
+    const healthPath = spec.paths?.["/api/health"];
+    expect(isRecord(healthPath)).toBe(true);
+    if (!isRecord(healthPath)) return;
+
+    const get = healthPath.get;
+    expect(isRecord(get)).toBe(true);
+    if (!isRecord(get)) return;
+
+    const responses = get.responses;
+    expect(isRecord(responses)).toBe(true);
+    if (!isRecord(responses)) return;
+
+    const response200 = responses[200 as keyof typeof responses];
+    expect(isRecord(response200)).toBe(true);
+    if (!isRecord(response200)) return;
+
+    const content = response200.content?.["application/json" as keyof typeof response200.content];
+    expect(isRecord(content)).toBe(true);
+    if (!isRecord(content)) return;
+
+    const schema = content.schema;
+    expect(isRecord(schema)).toBe(true);
+    if (!isRecord(schema)) return;
+
+    const required = schema.required;
+    expect(Array.isArray(required)).toBe(true);
+    if (!Array.isArray(required)) return;
+
+    expect(required).toEqual(
+      expect.arrayContaining(["ok", "service", "timestamp", "uptime", "build", "runtime"]),
+    );
+
+    // Check uptime structure
+    const properties = schema.properties;
+    expect(isRecord(properties)).toBe(true);
+    if (isRecord(properties)) {
+      const uptime = properties["uptime" as keyof typeof properties];
+      expect(isRecord(uptime)).toBe(true);
+      if (isRecord(uptime)) {
+        const uptimeRequired = uptime.required;
+        expect(Array.isArray(uptimeRequired)).toBe(true);
+        if (Array.isArray(uptimeRequired)) {
+          expect(uptimeRequired).toEqual(expect.arrayContaining(["seconds", "milliseconds", "formatted"]));
+        }
+      }
+    }
+  });
+
+  it("profile endpoint requires authentication", () => {
+    const spec = loadSpec();
+    const profilePath = spec.paths?.["/api/profile"];
+    expect(isRecord(profilePath)).toBe(true);
+    if (!isRecord(profilePath)) return;
+
+    const get = profilePath.get;
+    expect(isRecord(get)).toBe(true);
+    if (!isRecord(get)) return;
+
+    const security = get.security;
+    expect(Array.isArray(security)).toBe(true);
+    if (Array.isArray(security) && security.length > 0) {
+      expect(security[0]).toHaveProperty("cookieAuth");
+    }
+  });
+
+  it("transactions POST endpoint validates required fields", () => {
+    const spec = loadSpec();
+    const txPath = spec.paths?.["/api/transactions"];
+    expect(isRecord(txPath)).toBe(true);
+    if (!isRecord(txPath)) return;
+
+    const post = txPath.post;
+    expect(isRecord(post)).toBe(true);
+    if (!isRecord(post)) return;
+
+    const requestBody = post.requestBody;
+    expect(isRecord(requestBody)).toBe(true);
+    if (!isRecord(requestBody)) return;
+
+    const content = requestBody.content?.["application/json" as keyof typeof requestBody.content];
+    expect(isRecord(content)).toBe(true);
+    if (!isRecord(content)) return;
+
+    const schema = content.schema;
+    expect(isRecord(schema)).toBe(true);
+    if (!isRecord(schema)) return;
+
+    // Should reference CreateTransactionRequest schema
+    expect(schema).toHaveProperty("$ref");
+    if (schema.$ref && typeof schema.$ref === "string") {
+      const refPath = schema.$ref.split("/").pop();
+      const schemas = spec.components?.schemas;
+      if (refPath && isRecord(schemas)) {
+        const createSchema = schemas[refPath as keyof typeof schemas];
+        expect(isRecord(createSchema)).toBe(true);
+        if (isRecord(createSchema)) {
+          const required = createSchema.required;
+          expect(Array.isArray(required)).toBe(true);
+          if (Array.isArray(required)) {
+            expect(required).toEqual(expect.arrayContaining(["amount", "type", "category", "date"]));
+          }
+        }
+      }
+    }
+  });
 });
 
 

@@ -97,6 +97,20 @@ export const updateMonthlyBudgetGoalSchema = z.object({
       return val;
     }, z.number().finite().positive().nullable())
     .optional(),
+  nextIncomeDate: z
+    .preprocess((val) => {
+      if (val === "" || val == null) return null;
+      return val;
+    }, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçerli bir tarih seçin.").nullable())
+    .optional(),
+  mealPrice: z
+    .preprocess((val) => {
+      if (val === "" || val == null) return null;
+      if (typeof val === "number") return val;
+      if (typeof val === "string") return Number(val.replace(",", "."));
+      return val;
+    }, z.number().finite().positive("Yemek fiyatı 0'dan büyük olmalı.").nullable())
+    .optional(),
 });
 
 export type UpdateMonthlyBudgetGoalFormInput = z.input<typeof updateMonthlyBudgetGoalSchema>;

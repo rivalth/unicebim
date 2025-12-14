@@ -33,11 +33,25 @@ alter table public.profiles
 alter table public.profiles
   add column if not exists monthly_fixed_expenses numeric;
 
+-- Yemekhane Endeksi: Kullanıcının okulda bir öğün yemek fiyatı (TL)
+-- Bu değer, bakiyeyi "kaç öğün yemek" olarak göstermek için kullanılır
+alter table public.profiles
+  add column if not exists meal_price numeric check (meal_price is null or meal_price > 0);
+
+-- Burs Günü Geri Sayımı: Bir sonraki gelir/burs tarihi
+-- Kullanıcının bir sonraki gelir gününü belirlemesi için (örn: KYK burs günü)
+alter table public.profiles
+  add column if not exists next_income_date date;
+
+-- Profil Fotoğrafı: Kullanıcının profil fotoğrafının Supabase Storage'daki URL'i
+alter table public.profiles
+  add column if not exists avatar_url text;
+
 -- Verify columns exist (optional check - comment out if not needed)
 -- select column_name, data_type
 -- from information_schema.columns
 -- where table_schema = 'public' and table_name = 'profiles'
---   and column_name in ('monthly_budget_goal', 'monthly_fixed_expenses');
+--   and column_name in ('monthly_budget_goal', 'monthly_fixed_expenses', 'meal_price', 'next_income_date');
 
 -- Fixed Expenses (individual monthly fixed expenses)
 create table if not exists public.fixed_expenses (
@@ -50,6 +64,22 @@ create table if not exists public.fixed_expenses (
 
 create index if not exists fixed_expenses_user_id_idx on public.fixed_expenses (user_id);
 create index if not exists fixed_expenses_user_id_created_at_idx on public.fixed_expenses (user_id, created_at desc);
+
+-- Wallets (Micro-wallets: Nakit, Banka, Yemekhane Kartı, Akbil, vb.)
+-- Öğrencilerin farklı "cüzdanlarında" olan paralarını takip eder
+create table if not exists public.wallets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  name text not null,
+  balance numeric not null default 0 check (balance >= 0),
+  is_default boolean not null default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists wallets_user_id_idx on public.wallets (user_id);
+-- Her kullanıcı için sadece bir default wallet olabilir (partial unique index)
+create unique index if not exists wallets_one_default_per_user_idx on public.wallets (user_id)
+  where (is_default = true);
 
 -- Enums (optional but recommended for stronger constraints)
 do $$
@@ -73,6 +103,9 @@ create table if not exists public.transactions (
   type public.transaction_type not null,
   category text not null,
   date timestamp with time zone default timezone('utc'::text, now()) not null,
+  -- Micro-wallets: İşlem hangi cüzdandan yapıldı (opsiyonel, null ise default wallet)
+  -- Note: Foreign key constraint added in migration section below
+  wallet_id uuid,
   -- Database-level category validation: ensures category is one of the allowed values.
   -- This provides defense-in-depth alongside application-level validation (Zod schemas).
   -- Valid categories must match those defined in src/features/transactions/categories.ts
@@ -94,6 +127,7 @@ create table if not exists public.transactions (
 
 create index if not exists transactions_user_id_idx on public.transactions (user_id);
 create index if not exists transactions_user_id_date_idx on public.transactions (user_id, date desc);
+-- wallet_id index added in migration section below (after column is created)
 
 -- ---------------------------------------------------------------------------
 -- Migrations / hardening (safe-ish to run multiple times)
@@ -118,7 +152,24 @@ alter table public.transactions
   add constraint transactions_amount_positive check (amount > 0);
 
 -- Ensure category is one of the valid categories (if table already existed)
--- Database-level validation provides defense-in-depth alongside application-level validation
+-- First, update any invalid categories to a default valid value based on transaction type
+do $$
+begin
+  -- Fix invalid income categories (set to default: 'KYK/Burs')
+  update public.transactions
+  set category = 'KYK/Burs'
+  where type::text = 'income'
+    and category not in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş');
+
+  -- Fix invalid expense categories (set to default: 'Beslenme')
+  update public.transactions
+  set category = 'Beslenme'
+  where type::text = 'expense'
+    and category not in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul');
+end;
+$$;
+
+-- Now add the constraint (after cleaning invalid data)
 alter table public.transactions drop constraint if exists transactions_category_valid;
 alter table public.transactions
   add constraint transactions_category_valid check (
@@ -129,6 +180,7 @@ alter table public.transactions
   );
 
 -- Ensure category matches type (if table already existed)
+-- Data cleaning already handled above, so we can safely add the constraint
 alter table public.transactions drop constraint if exists transactions_category_matches_type;
 alter table public.transactions
   add constraint transactions_category_matches_type check (
@@ -138,6 +190,27 @@ alter table public.transactions
       type::text = 'expense' and category in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul')
     )
   );
+
+-- Add wallet_id column to transactions if it doesn't exist (migration for existing tables)
+alter table public.transactions
+  add column if not exists wallet_id uuid;
+
+-- Add foreign key constraint for wallet_id (only if wallets table exists)
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'wallets') then
+    -- Drop existing foreign key if it exists (in case of re-running)
+    alter table public.transactions drop constraint if exists transactions_wallet_id_fkey;
+    -- Add foreign key constraint
+    alter table public.transactions
+      add constraint transactions_wallet_id_fkey 
+      foreign key (wallet_id) references public.wallets(id) on delete set null;
+  end if;
+end;
+$$;
+
+-- Ensure wallet_id index exists (safe to run multiple times)
+create index if not exists transactions_wallet_id_idx on public.transactions (wallet_id);
 
 -- Best-effort: convert existing `transactions.type` from text to enum.
 do $$
@@ -317,6 +390,7 @@ grant execute on function public.get_expense_category_totals(timestamptz, timest
 alter table public.profiles enable row level security;
 alter table public.fixed_expenses enable row level security;
 alter table public.transactions enable row level security;
+alter table public.wallets enable row level security;
 
 -- Profiles policies
 drop policy if exists "profiles_select_own" on public.profiles;
@@ -365,7 +439,24 @@ drop policy if exists "tx_delete_own" on public.transactions;
 create policy "tx_delete_own" on public.transactions
   for delete using (auth.uid() = user_id);
 
--- Optional: auto-create profile row on signup
+-- Wallets policies
+drop policy if exists "wallets_select_own" on public.wallets;
+create policy "wallets_select_own" on public.wallets
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "wallets_insert_own" on public.wallets;
+create policy "wallets_insert_own" on public.wallets
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "wallets_update_own" on public.wallets;
+create policy "wallets_update_own" on public.wallets
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "wallets_delete_own" on public.wallets;
+create policy "wallets_delete_own" on public.wallets
+  for delete using (auth.uid() = user_id);
+
+-- Optional: auto-create profile row on signup + default wallets
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -376,6 +467,18 @@ begin
   insert into public.profiles (id, full_name)
   values (new.id, new.raw_user_meta_data->>'full_name')
   on conflict (id) do nothing;
+
+  -- Auto-create default wallets for new users: Nakit and Banka
+  -- Only create if they don't exist (idempotent check)
+  if not exists (select 1 from public.wallets where user_id = new.id and name = 'Nakit') then
+    insert into public.wallets (user_id, name, balance, is_default)
+    values (new.id, 'Nakit', 0, true);
+  end if;
+  
+  if not exists (select 1 from public.wallets where user_id = new.id and name = 'Banka') then
+    insert into public.wallets (user_id, name, balance, is_default)
+    values (new.id, 'Banka', 0, false);
+  end if;
 
   return new;
 end;
@@ -456,5 +559,72 @@ end;
 $$;
 
 grant execute on function public.check_rate_limit(text, integer, integer) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Storage Bucket for Profile Avatars
+-- ---------------------------------------------------------------------------
+-- Note: Storage buckets and policies must be created via Supabase Dashboard
+-- because storage.objects table ownership restrictions prevent SQL-based policy creation.
+--
+-- IMPORTANT: Follow these steps in Supabase Dashboard:
+--
+-- STEP 1: Create Storage Bucket
+-- 1. Go to Supabase Dashboard → Storage
+-- 2. Click "New bucket"
+-- 3. Name: avatars
+-- 4. Public bucket: YES (toggle on)
+-- 5. File size limit: 5242880 (5MB)
+-- 6. Allowed MIME types: image/jpeg, image/png, image/webp, image/gif
+-- 7. Click "Create bucket"
+--
+-- STEP 2: Create RLS Policies
+-- After creating the bucket, go to Storage → avatars → Policies
+-- Create the following policies (click "New Policy" for each):
+--
+-- Policy 1: "Users can upload their own avatar"
+--   Target roles: authenticated
+--   Operation: INSERT
+--   Policy definition (SQL):
+--   (
+--     bucket_id = 'avatars' AND
+--     auth.uid()::text = (string_to_array(name, '/'))[1]
+--   )
+--
+-- Policy 2: "Users can update their own avatar"
+--   Target roles: authenticated
+--   Operation: UPDATE
+--   Policy definition (SQL):
+--   (
+--     bucket_id = 'avatars' AND
+--     auth.uid()::text = (string_to_array(name, '/'))[1]
+--   )
+--
+-- Policy 3: "Users can delete their own avatar"
+--   Target roles: authenticated
+--   Operation: DELETE
+--   Policy definition (SQL):
+--   (
+--     bucket_id = 'avatars' AND
+--     auth.uid()::text = (string_to_array(name, '/'))[1]
+--   )
+--
+-- Policy 4: "Avatars are publicly readable"
+--   Target roles: anon, authenticated
+--   Operation: SELECT
+--   Policy definition (SQL):
+--   (bucket_id = 'avatars')
+--
+-- ALTERNATIVE: If you have service_role access, you can try the SQL below
+-- (but it may still fail due to permissions - use Dashboard method instead):
+--
+-- insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+-- values (
+--   'avatars',
+--   'avatars',
+--   true,
+--   5242880,
+--   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
+-- )
+-- on conflict (id) do nothing;
 
 

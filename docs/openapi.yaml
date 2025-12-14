@@ -8,6 +8,7 @@ info:
     Notes:
     - Auth is handled via Supabase session cookies in the web app.
     - Endpoints below assume an authenticated session for protected routes.
+    - All protected endpoints require valid Supabase SSR session cookies.
 servers:
   - url: http://localhost:3000
 
@@ -20,33 +21,93 @@ paths:
   /api/health:
     get:
       tags: [Health]
-      summary: Health check
+      summary: Health check endpoint with system information
+      description: |
+        Returns service health status along with build metadata, uptime, and runtime information.
+        Useful for monitoring and diagnostics. No authentication required.
       responses:
         "200":
           description: OK
+          headers:
+            etag:
+              description: Weak ETag for caching
+              schema:
+                type: string
+              example: W/"abc123"
+            cache-control:
+              description: Cache control directives
+              schema:
+                type: string
+              example: "public, max-age=0, s-maxage=60, stale-while-revalidate=300"
+            x-request-id:
+              description: Request correlation ID
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 type: object
-                required: [ok, service]
+                required: [ok, service, timestamp, uptime, build, runtime]
                 properties:
                   ok:
                     type: boolean
+                    description: Service health status (always true if endpoint responds)
                   service:
                     type: string
+                    example: "unicebim"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 timestamp of the health check response
+                  uptime:
+                    type: object
+                    required: [seconds, milliseconds, formatted]
+                    description: Server process uptime information
+                    properties:
+                      seconds:
+                        type: integer
+                        description: Uptime in seconds
+                        example: 3600
+                      milliseconds:
+                        type: integer
+                        description: Uptime in milliseconds
+                        example: 3600000
+                      formatted:
+                        type: string
+                        description: Human-readable uptime format
+                        example: "1h"
                   build:
                     type: object
-                    description: Optional build metadata for diagnostics (no secrets).
+                    description: Optional build metadata for diagnostics (no secrets)
                     properties:
                       version:
                         type: string
                         nullable: true
+                        description: Application version (from NEXT_PUBLIC_APP_VERSION)
                       commitSha:
                         type: string
                         nullable: true
+                        description: Git commit SHA (from VERCEL_GIT_COMMIT_SHA)
                       environment:
                         type: string
                         nullable: true
+                        description: Deployment environment (production, preview, development)
+                  runtime:
+                    type: object
+                    required: [nodeVersion, platform, arch]
+                    description: Node.js runtime information
+                    properties:
+                      nodeVersion:
+                        type: string
+                        example: "v20.10.0"
+                      platform:
+                        type: string
+                        example: "linux"
+                      arch:
+                        type: string
+                        example: "x64"
+        "304":
+          description: Not Modified (cached response, use If-None-Match header)
 
   /api/profile:
     get:
@@ -259,11 +320,42 @@ components:
       in: cookie
       name: sb-access-token
       description: |
-        Supabase SSR session cookie used by the web app.
+        Supabase SSR (Server-Side Rendering) session authentication using HTTP-only cookies.
 
-        Notes:
-        - The app relies on Supabase-managed session cookies (access/refresh).
-        - Clients must send cookies to access protected endpoints.
+        ## Cookie Details
+
+        The web app uses Supabase's `@supabase/ssr` package which manages session cookies automatically:
+
+        - **`sb-access-token`**: JWT access token (short-lived, typically 1 hour)
+        - **`sb-refresh-token`**: Refresh token used to obtain new access tokens (long-lived)
+
+        Both cookies are:
+        - HTTP-only (not accessible via JavaScript for security)
+        - Secure (only sent over HTTPS in production)
+        - SameSite=Lax (protects against CSRF)
+
+        ## How Authentication Works
+
+        1. User logs in via `/api/auth/callback` or Server Actions (`loginAction`, `registerAction`)
+        2. Supabase SSR middleware sets session cookies in the response
+        3. Subsequent requests to protected endpoints include these cookies automatically
+        4. Server-side route handlers and Server Actions validate the session using `createSupabaseServerClient()`
+        5. If access token expires, middleware automatically refreshes it using the refresh token
+
+        ## For API Clients (cURL, Postman, etc.)
+
+        To authenticate API requests manually:
+
+        1. Login via the web app and capture cookies from browser DevTools
+        2. Include both `sb-access-token` and `sb-refresh-token` cookies in requests
+        3. Handle token refresh if access token expires (or use refresh token endpoint)
+
+        ## Security Notes
+
+        - Cookies are automatically included by browsers but must be manually set for API clients
+        - CSRF protection is enforced for state-changing operations (POST/PATCH/DELETE)
+        - Rate limiting applies to all authenticated endpoints
+        - Session validation happens on every request via Supabase RLS policies
 
   schemas:
     ErrorResponse:

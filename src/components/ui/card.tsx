@@ -4,6 +4,7 @@ import * as React from "react";
 import { motion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 
 type MotionDivProps = React.ComponentProps<typeof motion.div>;
 
@@ -25,6 +26,25 @@ type CardProps = Omit<MotionDivProps, "variants"> & {
 };
 
 function Card({ className, variants = cardVariants, initial = "hidden", animate = "visible", ...props }: CardProps) {
+  const [mounted, setMounted] = React.useState(false);
+  const reduceMotion = usePrefersReducedMotion();
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // During SSR and initial hydration, render without animation to prevent flash
+  // Card starts with opacity: 0 in "hidden" state, so we must render as plain div during SSR
+  if (!mounted || reduceMotion) {
+    return (
+      <div
+        data-slot="card"
+        className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
+        {...(props as React.ComponentProps<"div">)}
+      />
+    );
+  }
+
   return (
     <motion.div
       data-slot="card"
