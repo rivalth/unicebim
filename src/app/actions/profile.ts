@@ -95,18 +95,25 @@ export async function updateProfileAction(
 }
 
 export async function uploadAvatarAction(file: File): Promise<UploadAvatarResult> {
-  const originCheck = await enforceSameOriginForServerAction("uploadAvatarAction");
-  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+  try {
+    const originCheck = await enforceSameOriginForServerAction("uploadAvatarAction");
+    if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
 
-  // Validate file type
-  if (!file.type.startsWith("image/")) {
-    return { ok: false, message: "Lütfen bir resim dosyası seçin." };
-  }
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      return { ok: false, message: "Lütfen bir resim dosyası seçin." };
+    }
 
-  // Validate file size (5MB)
-  if (file.size > 5 * 1024 * 1024) {
-    return { ok: false, message: "Dosya boyutu 5MB'dan küçük olmalıdır." };
-  }
+    // Validate file size (5MB)
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSizeBytes) {
+      const maxSizeMB = (maxSizeBytes / (1024 * 1024)).toFixed(0);
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      return {
+        ok: false,
+        message: `Dosya boyutu çok büyük. Seçtiğiniz dosya ${fileSizeMB}MB, maksimum izin verilen boyut ${maxSizeMB}MB'dır.`,
+      };
+    }
 
   const supabase = await createSupabaseServerClient();
   const user = await getCachedUser();
@@ -220,10 +227,35 @@ export async function uploadAvatarAction(file: File): Promise<UploadAvatarResult
     }
   }
 
-  revalidatePath("/profile");
-  revalidatePath("/dashboard");
+    revalidatePath("/profile");
+    revalidatePath("/dashboard");
 
-  return { ok: true, avatarUrl: publicUrl };
+    return { ok: true, avatarUrl: publicUrl };
+  } catch (error) {
+    // Handle Next.js body size limit error (statusCode: 413)
+    if (error && typeof error === "object" && "statusCode" in error && error.statusCode === 413) {
+      logger.error("uploadAvatarAction.body_size_limit", {
+        requestId: "unknown",
+        fileSize: file.size,
+        fileName: file.name,
+      });
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      return {
+        ok: false,
+        message: `Dosya boyutu çok büyük (${fileSizeMB}MB). Lütfen daha küçük bir dosya seçin. Maksimum izin verilen boyut 5MB'dır.`,
+      };
+    }
+
+    // Handle other unexpected errors
+    logger.error("uploadAvatarAction.unexpected_error", {
+      requestId: "unknown",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      message: "Fotoğraf yüklenirken beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
+    };
+  }
 }
 
 export async function changePasswordAction(

@@ -56,9 +56,15 @@ export function AvatarUpload({ currentAvatarUrl, fullName, size = "xl" }: Avatar
         if (result.avatarUrl) {
           setPreviewUrl(result.avatarUrl);
         }
+        setError(null); // Clear any previous errors on success
       }
-    } catch {
-      setError("Yükleme sırasında bir hata oluştu.");
+    } catch (error) {
+      // Handle network errors or other unexpected errors
+      const errorMessage =
+        error instanceof Error && error.message.includes("413")
+          ? "Dosya boyutu çok büyük. Lütfen daha küçük bir dosya seçin (maksimum 5MB)."
+          : "Yükleme sırasında bir hata oluştu. Lütfen tekrar deneyin.";
+      setError(errorMessage);
       setPreviewUrl(currentAvatarUrl ?? null);
     } finally {
       setIsUploading(false);

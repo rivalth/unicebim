@@ -52,6 +52,12 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Configure Server Actions body size limit (default: 1MB, increase to 5MB for avatar uploads)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "5mb",
+    },
+  },
 };
 
 // Wrap Next.js config with Sentry if DSN is configured
