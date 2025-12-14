@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AnimatedContainer } from "../animated-container";
 import { CategoryPieChart } from "@/features/charts/category-pie-chart";
 import { MonthlyTrendChart } from "@/features/charts/monthly-trend-chart";
+import { toFiniteNumber } from "@/lib/number";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import MonthPicker from "../month-picker";
 

@@ -10,7 +10,7 @@ import { enforceSameOriginForServerAction } from "@/lib/security/server-action";
 import { getClientIp, buildRateLimitKey, checkRateLimit, rateLimitPolicies } from "@/lib/security/rate-limit";
 
 const updateProfileSchema = z.object({
-  full_name: z.string().min(2, "Ad en az 2 karakter olmalıdır").max(100, "Ad en fazla 100 karakter olabilir").optional(),
+  full_name: z.string().min(2, "Ad en az 2 karakter olmalıdır").max(100, "Ad en fazla 100 karakter olabilir").nullable().optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -60,7 +60,7 @@ export async function updateProfileAction(
   const ip = getClientIp(h);
   const rl = await checkRateLimit({
     key: buildRateLimitKey({ scope: "profile.write", ip, userId: user.id }),
-    policy: rateLimitPolicies["profile.write"] ?? rateLimitPolicies["default"],
+    policy: rateLimitPolicies["profile.write"],
     requestId: originCheck.requestId,
     context: { action: "updateProfileAction", userId: user.id },
   });
@@ -68,7 +68,7 @@ export async function updateProfileAction(
     return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
   }
 
-  const updateData: { full_name?: string } = {};
+  const updateData: { full_name?: string | null } = {};
   if (parsed.data.full_name !== undefined) {
     updateData.full_name = parsed.data.full_name || null;
   }
@@ -119,7 +119,7 @@ export async function uploadAvatarAction(file: File): Promise<UploadAvatarResult
   const ip = getClientIp(h);
   const rl = await checkRateLimit({
     key: buildRateLimitKey({ scope: "profile.write", ip, userId: user.id }),
-    policy: rateLimitPolicies["profile.write"] ?? rateLimitPolicies["default"],
+    policy: rateLimitPolicies["profile.write"],
     requestId: originCheck.requestId,
     context: { action: "uploadAvatarAction", userId: user.id },
   });

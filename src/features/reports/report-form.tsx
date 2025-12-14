@@ -136,9 +136,9 @@ export function ReportForm({ onReportGenerated }: Props) {
                   checked={form.watch("types")?.includes("income") || false}
                   onChange={(e) => {
                     const current = form.getValues("types") || [];
-                    const newValue = e.target.checked
+                    const newValue = (e.target.checked
                       ? [...current.filter((t) => t !== "income"), "income"]
-                      : current.filter((t) => t !== "income");
+                      : current.filter((t) => t !== "income")) as ("income" | "expense")[];
                     form.setValue("types", newValue.length > 0 ? newValue : undefined);
                   }}
                   className="rounded"
@@ -151,9 +151,9 @@ export function ReportForm({ onReportGenerated }: Props) {
                   checked={form.watch("types")?.includes("expense") || false}
                   onChange={(e) => {
                     const current = form.getValues("types") || [];
-                    const newValue = e.target.checked
+                    const newValue = (e.target.checked
                       ? [...current.filter((t) => t !== "expense"), "expense"]
-                      : current.filter((t) => t !== "expense");
+                      : current.filter((t) => t !== "expense")) as ("income" | "expense")[];
                     form.setValue("types", newValue.length > 0 ? newValue : undefined);
                   }}
                   className="rounded"

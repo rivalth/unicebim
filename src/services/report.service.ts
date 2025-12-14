@@ -128,15 +128,17 @@ export async function generateReportData(
         logger.warn("Report.profile select failed", { code: error.code, message: error.message });
       } else if (profileRaw) {
         const profile = mapProfileRow(profileRaw);
-        reportData.profile = {
-          id: profile.id,
-          full_name: profile.full_name,
-          monthly_budget_goal: profile.monthly_budget_goal,
-          monthly_fixed_expenses: profile.monthly_fixed_expenses,
-          meal_price: profile.meal_price,
-          next_income_date: profile.next_income_date?.toISOString() ?? null,
-          avatar_url: profile.avatar_url ?? null,
-        };
+        if (profile) {
+          reportData.profile = {
+            id: profile.id,
+            full_name: profile.full_name,
+            monthly_budget_goal: profile.monthly_budget_goal,
+            monthly_fixed_expenses: profile.monthly_fixed_expenses,
+            meal_price: profile.meal_price,
+            next_income_date: profile.next_income_date ?? null,
+            avatar_url: profile.avatar_url ?? null,
+          };
+        }
       }
     } catch (err) {
       logger.error("Report.profile fetch error", { error: err });

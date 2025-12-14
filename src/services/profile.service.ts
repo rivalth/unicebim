@@ -30,7 +30,7 @@ export async function getProfile(requestId: string): Promise<ProfileData | null>
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date")
+    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date, avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -68,7 +68,7 @@ export async function updateProfile(
     .from("profiles")
     .update(updates)
     .eq("id", user.id)
-    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date")
+    .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date, avatar_url")
     .maybeSingle();
 
   if (error) {

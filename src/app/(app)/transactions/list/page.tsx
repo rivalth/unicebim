@@ -5,6 +5,7 @@ import { AnimatedContainer } from "../animated-container";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import TransactionHistoryPaginated from "@/features/transactions/transaction-history-paginated";
 import { formatTRY } from "@/lib/money";
+import { toFiniteNumber } from "@/lib/number";
 import { mapProfileRow, mapTransactionRow, normalizeTransactionAmount } from "@/lib/supabase/mappers";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import { encodeTxCursor } from "@/lib/pagination/tx-cursor";
