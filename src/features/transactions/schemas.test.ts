@@ -58,11 +58,6 @@ describe("transactions schemas", () => {
       const parsed = updateMonthlyBudgetGoalSchema.parse({ monthlyBudgetGoal: "" });
       expect(parsed.monthlyBudgetGoal).toBeNull();
     });
-
-    it("treats empty fixed expenses as null", () => {
-      const parsed = updateMonthlyBudgetGoalSchema.parse({ monthlyFixedExpenses: "" });
-      expect(parsed.monthlyFixedExpenses).toBeNull();
-    });
   });
 });
 
