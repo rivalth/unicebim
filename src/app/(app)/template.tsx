@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 
 const pageVariants = {
   initial: {
@@ -28,6 +29,12 @@ export default function AppTemplate({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const reduceMotion = usePrefersReducedMotion();
+
+  if (reduceMotion) {
+    return <div>{children}</div>;
+  }
+
   return (
     <motion.div
       initial="initial"
