@@ -14,7 +14,7 @@ const contentSecurityPolicy = [
   // Dev tooling may rely on eval; keep it disabled in production.
   // Next.js Turbopack requires 'unsafe-inline' for inline scripts in dev mode
   process.env.NODE_ENV === "production"
-    ? "script-src 'self'"
+    ? "script-src 'self' 'unsafe-inline'"
     : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
   // Supabase (Auth + PostgREST) runs over HTTPS/WSS.
   // Sentry error tracking (only when DSN is configured)

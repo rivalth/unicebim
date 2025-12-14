@@ -93,7 +93,15 @@ async function resolveSiteUrl(): Promise<string | null> {
 
 export async function registerAction(input: RegisterInput): Promise<AuthActionResult> {
   const originCheck = await enforceSameOriginForServerAction("registerAction");
-  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
+  if (!originCheck.ok) {
+    // Enhanced error message for debugging
+    logger.error("registerAction.csrf_failed", {
+      requestId: originCheck.requestId,
+      message: "CSRF check failed - check origin headers and NEXT_PUBLIC_SITE_URL",
+    });
+    return { ok: false, message: "Güvenlik kontrolü başarısız. Lütfen sayfayı yenileyip tekrar deneyin." };
+  }
 
   const h = await headers();
   const ip = getClientIp(h);

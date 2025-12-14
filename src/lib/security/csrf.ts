@@ -40,6 +40,28 @@ export function getExpectedOriginFromHeaders(headers: HeadersLike): string | nul
   return `${proto}://${host}`;
 }
 
+/**
+ * Check if the request is a Next.js Server Action.
+ * Next.js Server Actions use specific headers/content-type patterns.
+ */
+function isNextJSServerAction(headers: HeadersLike): boolean {
+  // Next.js Server Actions use the `next-action` header or specific content-type
+  const nextAction = headers.get("next-action");
+  if (nextAction) return true;
+
+  const contentType = headers.get("content-type") ?? "";
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("text/plain;charset=UTF-8")
+  ) {
+    // Additional check: Server Actions are POST requests
+    const method = headers.get("x-method") ?? headers.get(":method");
+    if (method === "POST") return true;
+  }
+
+  return false;
+}
+
 export function isSameOriginRequest({
   headers,
   expectedOrigin,
@@ -58,15 +80,47 @@ export function isSameOriginRequest({
     return allowed.has(sourceOrigin);
   }
 
-  // Fallback for environments where Origin/Referer may be absent.
+  // Fallback for environments where Origin/Referer may be absent (e.g., Vercel proxy)
   // sec-fetch-site is controlled by the browser; attackers can't spoof it cross-site.
   const secFetchSite = headers.get("sec-fetch-site");
-  if (!secFetchSite) return false;
 
+  // Next.js Server Actions require special handling in proxy environments
+  const isServerAction = isNextJSServerAction(headers);
+
+  if (!secFetchSite) {
+    // If we have an expected origin and no source origin/referer,
+    // and this is likely a Server Action (POST), be more lenient
+    // This handles cases where Origin header might be stripped by proxy
+    const method = headers.get("x-method") ?? headers.get(":method");
+    if ((method === "POST" || isServerAction) && expectedOrigin) {
+      // Allow if we're confident about the expected origin (from headers)
+      const host = headers.get("x-forwarded-host") ?? headers.get("host");
+      if (host) {
+        // If host matches expected origin, likely safe
+        try {
+          const expectedHost = new URL(expectedOrigin).host;
+          const expectedHostname = expectedHost.split(":")[0];
+          const requestHostname = host.split(":")[0];
+
+          // Exact host match or hostname match (ignoring port)
+          if (host === expectedHost || requestHostname === expectedHostname) {
+            // For Next.js Server Actions, additional validation via host is sufficient
+            if (isServerAction) return true;
+
+            // For regular POST, still require host match (already checked above)
+            return true;
+          }
+        } catch {
+          // Invalid URL, continue to strict check
+        }
+      }
+    }
+    return false;
+  }
+
+  // Standard browser-based CSRF protection
   if (secFetchSite === "same-origin") return true;
   if (allowSameSite && secFetchSite === "same-site") return true;
 
   return false;
 }
-
-

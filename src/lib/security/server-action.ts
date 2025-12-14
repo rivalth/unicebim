@@ -23,17 +23,34 @@ export async function enforceSameOriginForServerAction(action: string): Promise<
     getExpectedOriginFromHeaders(h) ??
     (envPublic.NEXT_PUBLIC_SITE_URL ? new URL(envPublic.NEXT_PUBLIC_SITE_URL).origin : null);
 
+  // Enhanced logging for debugging production issues
+  const sourceOrigin = h.get("origin");
+  const referer = h.get("referer");
+  const host = h.get("host") ?? h.get("x-forwarded-host");
+  const forwardedProto = h.get("x-forwarded-proto");
+  const secFetchSite = h.get("sec-fetch-site");
+  const nextAction = h.get("next-action");
+  const contentType = h.get("content-type");
+  const method = h.get("x-method") ?? h.get(":method");
+
   if (!expectedOrigin || !isSameOriginRequest({ headers: h, expectedOrigin })) {
     logger.warn("csrf.blocked", {
       requestId,
       action,
-      origin: h.get("origin"),
-      referer: h.get("referer"),
+      expectedOrigin,
+      sourceOrigin,
+      referer,
+      host,
+      forwardedProto,
+      secFetchSite,
+      nextAction,
+      contentType,
+      method,
+      nextPublicSiteUrl: envPublic.NEXT_PUBLIC_SITE_URL,
     });
     return { ok: false, requestId };
   }
 
   return { ok: true, requestId };
 }
-
 
