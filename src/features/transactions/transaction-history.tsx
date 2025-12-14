@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toLocalYmd } from "@/lib/date";
+import { formatTRY } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import {
   ALL_CATEGORIES,
@@ -36,6 +37,7 @@ import {
   INCOME_CATEGORIES,
   type TransactionCategory,
 } from "@/features/transactions/categories";
+import TransactionCategoryPicker from "@/features/transactions/category-picker";
 import { getCategoryMeta } from "@/features/transactions/category-meta";
 import { updateTransactionSchema, type UpdateTransactionFormInput } from "@/features/transactions/schemas";
 
@@ -49,14 +51,6 @@ export type TransactionRow = {
 
 function isKnownCategory(category: string): category is TransactionCategory {
   return (ALL_CATEGORIES as readonly string[]).includes(category);
-}
-
-function formatTRY(amount: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 2,
-  }).format(amount);
 }
 
 export default function TransactionHistory({ transactions }: { transactions: TransactionRow[] }) {
@@ -138,7 +132,14 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
   };
 
   if (transactions.length === 0) {
-    return <p className="text-sm text-muted-foreground">Bu ay henüz işlem yok.</p>;
+    return (
+      <div className="flex flex-col items-center gap-4 py-8 text-center">
+        <p className="text-sm text-muted-foreground">Bu ay henüz işlem yok.</p>
+        <Button asChild variant="outline">
+          <a href="/transactions">İşlem Ekle</a>
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -177,7 +178,7 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
                   )}
                 >
                   {t.type === "income" ? "+" : "-"}
-                  {formatTRY(t.amount)}
+                  {formatTRY(t.amount, { maximumFractionDigits: 2 })}
                 </div>
 
                 <Button
@@ -239,7 +240,7 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
               <Input
                 id="edit-amount"
                 inputMode="decimal"
-                placeholder="0"
+                placeholder="Örn: 120"
                 {...form.register("amount")}
               />
               {form.formState.errors.amount?.message ? (
@@ -272,28 +273,13 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
             <div className="grid gap-2">
               <Label htmlFor="edit-category">Kategori</Label>
               <input id="edit-category" type="hidden" {...form.register("category")} />
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {(type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((category) => {
-                  const { Icon, label } = getCategoryMeta(category as TransactionCategory);
-                  const isSelected = selectedCategory === category;
-                  return (
-                    <Button
-                      key={category}
-                      type="button"
-                      variant={isSelected ? "default" : "outline"}
-                      className="justify-start"
-                      onClick={() =>
-                        form.setValue("category", category as TransactionCategory, {
-                          shouldValidate: true,
-                        })
-                      }
-                    >
-                      <Icon className="size-4" aria-hidden="true" />
-                      <span className="truncate">{label}</span>
-                    </Button>
-                  );
-                })}
-              </div>
+              <TransactionCategoryPicker
+                type={type}
+                value={(selectedCategory as TransactionCategory) ?? "Beslenme"}
+                onChange={(category) =>
+                  form.setValue("category", category as TransactionCategory, { shouldValidate: true })
+                }
+              />
               {form.formState.errors.category?.message ? (
                 <p className="text-sm text-destructive" role="alert">
                   {form.formState.errors.category.message}
