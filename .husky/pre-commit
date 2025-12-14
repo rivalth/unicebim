@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Block obvious secret leaks before they ever reach the remote.
+node scripts/secret-scan-staged.mjs
+
+# Enforce code quality on staged files.
+yarn lint-staged
+
+
