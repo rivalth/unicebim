@@ -1,44 +1,10 @@
 import { redirect } from "next/navigation";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import Link from "next/link";
 
 import { logoutAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
-import { logger } from "@/lib/logger";
-import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/types";
-
-async function ensureProfile(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-  fullName?: unknown,
-) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    logger.warn("ensureProfile.select failed", { code: error.code, message: error.message });
-    return;
-  }
-
-  if (data) return;
-
-  const { error: insertError } = await supabase.from("profiles").insert({
-    id: userId,
-    full_name: typeof fullName === "string" ? fullName : null,
-  });
-
-  if (insertError) {
-    logger.warn("ensureProfile.insert failed", {
-      code: insertError.code,
-      message: insertError.message,
-    });
-  }
-}
+import { getCachedUser } from "@/lib/supabase/server";
 
 export default async function AppLayout({
   children,
@@ -48,9 +14,6 @@ export default async function AppLayout({
   const user = await getCachedUser();
 
   if (!user) redirect("/login");
-
-  const supabase = await createSupabaseServerClient();
-  await ensureProfile(supabase, user.id, user.user_metadata?.full_name);
 
   return (
     <div className="min-h-screen">
