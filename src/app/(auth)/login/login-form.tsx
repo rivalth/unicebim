@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
@@ -136,12 +135,6 @@ export default function LoginForm() {
         {isPending ? "Giriş yapılıyor..." : "Giriş yap"}
       </button>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Hesabın yok mu?{" "}
-        <Link className="text-foreground underline underline-offset-4" href="/register">
-          Kayıt ol
-        </Link>
-      </p>
     </form>
   );
 }

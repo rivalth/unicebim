@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { UserMenu } from "@/components/navigation/user-menu";
+import { Logo } from "@/components/brand/logo";
 import { getCachedUser } from "@/lib/supabase/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ChevronDown } from "lucide-react";
@@ -43,8 +44,8 @@ export default async function AppLayout({
       <header className="hidden border-b md:block">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center gap-4 sm:gap-6">
-            <Link className="text-sm font-semibold tracking-tight" href="/dashboard">
-              UniCebim
+            <Link href="/dashboard">
+              <Logo width={20} height={20} showText textClassName="text-sm" />
             </Link>
             <nav className="flex items-center gap-2 sm:gap-3 text-sm">
               <DropdownMenu>
