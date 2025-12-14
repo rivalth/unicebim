@@ -10,6 +10,10 @@ import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import AddWalletForm from "@/features/wallets/add-wallet-form";
 import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
 import TransactionHistory from "@/features/transactions/transaction-history";
+import AddPaymentForm from "@/features/payments/add-payment-form";
+import PaymentsList from "@/features/payments/payments-list";
+import { getUpcomingPaymentsWithAnalysis } from "@/services/payment.service";
+import type { PaymentAnalysisInput } from "@/features/payments/payment-analysis";
 import { logger } from "@/lib/logger";
 import { formatTRY } from "@/lib/money";
 import { toFiniteNumber } from "@/lib/number";
@@ -33,7 +37,7 @@ export default async function DashboardPage() {
   const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   // Execute database queries in parallel
-  const [profileResult, fixedExpensesResult, recentTransactionsResult, summaryResult, expenseTotalsResult, walletsResult] = await Promise.all([
+  const [profileResult, fixedExpensesResult, recentTransactionsResult, summaryResult, expenseTotalsResult, walletsResult, paymentsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date, avatar_url")
@@ -67,6 +71,7 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: true }),
+    getUpcomingPaymentsWithAnalysis("dashboard"),
   ]);
 
   const { data: profile, error: profileError } = profileResult;
@@ -75,6 +80,7 @@ export default async function DashboardPage() {
   const { data: summaryRows, error: summaryError } = summaryResult;
   const { data: expenseTotalsRows, error: expenseTotalsError } = expenseTotalsResult;
   const { data: walletsRaw, error: walletsError } = walletsResult;
+  const payments = paymentsResult ?? [];
 
   if (profileError) {
     logger.warn("Dashboard.profile select failed", {
@@ -250,6 +256,17 @@ export default async function DashboardPage() {
     }
   }
 
+  // Calculate unpaid payments total (Reserved Amount)
+  const unpaidPayments = payments.filter((p) => !p.is_paid);
+  const unpaidPaymentsTotal = unpaidPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  // Calculate Total Balance (Gelir - Gider)
+  const totalBalance = incomeTotal - expenseTotal;
+
+  // Calculate Safe-to-Spend Balance (Rezerv Sistemi)
+  const safeToSpendBalance = totalBalance - unpaidPaymentsTotal;
+
+  // Adjust totalMoney to account for upcoming payments (they reduce available balance)
   const totalMoney = incomeTotal > 0 ? incomeTotal : monthlyBudgetGoal ?? 0;
 
   const smart = calculateSmartBalance({
@@ -259,6 +276,23 @@ export default async function DashboardPage() {
     fixedExpensesPaid,
     now,
   });
+
+  // Calculate average daily expense for payment analysis
+  const daysElapsed = Math.max(1, now.getUTCDate());
+  const averageDailyExpense = daysElapsed > 0 ? expenseTotal / daysElapsed : 0;
+
+  // Prepare payment analysis input
+  const paymentAnalysisInput: PaymentAnalysisInput | undefined = unpaidPayments.length > 0
+    ? {
+        currentBalance: smart.currentBalance,
+        totalUnpaidPayments: unpaidPaymentsTotal,
+        averageDailyExpense,
+        daysRemainingInMonth: smart.remainingDaysInMonth,
+        nextIncomeDate: nextIncomeDate ? new Date(nextIncomeDate) : null,
+        expectedIncomeAmount: null, // Could be calculated from transaction history
+        now,
+      }
+    : undefined;
 
   const daily = Math.round(smart.todaySpendableLimit);
   const dailyColor =
@@ -323,39 +357,88 @@ export default async function DashboardPage() {
         <p className="text-xs sm:text-sm text-muted-foreground">Bugün ne kadar yiyebilirsin?</p>
       </div>
 
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-emerald-500/10 via-background to-background shadow">
+      {/* Rezerv Sistemi: Safe-to-Spend Balance Card */}
+      <Card
+        className={`overflow-hidden border-0 shadow ${
+          safeToSpendBalance < 0
+            ? "bg-gradient-to-br from-destructive/20 via-destructive/10 to-background border-destructive/50"
+            : "bg-gradient-to-br from-emerald-500/10 via-background to-background"
+        }`}
+      >
         <CardHeader className="pb-3">
-          <CardTitle className="text-base sm:text-lg">Bugün harcanabilir limitin</CardTitle>
+          <CardTitle className="text-base sm:text-lg">
+            {safeToSpendBalance < 0 ? "⚠️ DİKKAT: Ekside Bakiyeniz Var!" : "Harcanabilir Bakiyeniz"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className={`text-3xl sm:text-5xl font-semibold tracking-tight ${dailyColor}`}>
-            {formatTRY(daily)}
+          {/* Ana Sayı: Safe-to-Spend Balance */}
+          <div
+            className={`text-3xl sm:text-5xl font-semibold tracking-tight ${
+              safeToSpendBalance < 0
+                ? "text-destructive"
+                : safeToSpendBalance < 500
+                  ? "text-amber-600"
+                  : "text-emerald-600"
+            }`}
+          >
+            {formatTRY(safeToSpendBalance)}
           </div>
-          <div className="grid gap-2 text-xs sm:text-sm text-muted-foreground sm:grid-cols-2">
-            <div>
-              Kalan gün: <span className="font-medium text-foreground">{smart.remainingDaysInMonth}</span>
-            </div>
-            <div>
-              Kalan sabit gider:{" "}
-              <span className="font-medium text-foreground">
-                {formatTRY(smart.remainingFixedExpenses)}
+
+          {/* Toplam Cüzdan (Daha sönük) */}
+          <div className="text-xs sm:text-sm text-muted-foreground">
+            Toplam Cüzdan: <span className="font-medium text-foreground">{formatTRY(totalBalance)}</span>
+            {unpaidPaymentsTotal > 0 && (
+              <span className="ml-2">
+                (Rezerve: <span className="font-medium text-foreground">{formatTRY(unpaidPaymentsTotal)}</span>)
               </span>
+            )}
+          </div>
+
+          {/* Kritik Uyarı */}
+          {safeToSpendBalance < 0 && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+              <p className="text-sm font-medium text-destructive">
+                ⚠️ Acil Durum: Ödemelerinizi karşılayamıyorsunuz!
+              </p>
+              <p className="text-xs text-destructive/90 mt-1">
+                {unpaidPayments.length > 0 && (
+                  <>
+                    {unpaidPayments
+                      .slice(0, 2)
+                      .map((p) => {
+                        const dueDate = new Date(p.due_date);
+                        return `${formatTRY(p.amount)} (${dueDate.getDate()} ${["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][dueDate.getMonth()]})`;
+                      })
+                      .join(", ")}
+                    {unpaidPayments.length > 2 && ` ve ${unpaidPayments.length - 2} ödeme daha`} için{" "}
+                    {formatTRY(Math.abs(safeToSpendBalance))} TL eksiğiniz var. Acil para bulman veya
+                    harcamayı kesmen lazım!
+                  </>
+                )}
+              </p>
             </div>
-            <div>
-              Ay toplam para:{" "}
-              <span className="font-medium text-foreground">{formatTRY(totalMoney)}</span>
+          )}
+
+          {/* Günlük Harcanabilir Limit */}
+          <div className="border-t pt-3">
+            <div className="text-xs sm:text-sm text-muted-foreground mb-2">
+              Bugün harcanabilir limitin:{" "}
+              <span className={`font-medium ${dailyColor}`}>{formatTRY(daily)}</span>
             </div>
-            <div>
-              Kalan bakiye:{" "}
-              <span className="font-medium text-foreground">{formatTRY(smart.currentBalance)}</span>
+            <div className="grid gap-2 text-xs sm:text-sm text-muted-foreground sm:grid-cols-2">
+              <div>
+                Kalan gün: <span className="font-medium text-foreground">{smart.remainingDaysInMonth}</span>
+              </div>
+              <div>
+                Kalan sabit gider:{" "}
+                <span className="font-medium text-foreground">
+                  {formatTRY(smart.remainingFixedExpenses)}
+                </span>
+              </div>
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Not: Gelir girdiysen “ay toplam para” gelir toplamıdır; gelir girmediysen aylık hedef bütçe
-            kullanılır.
-          </p>
-          {mealPrice && <MealIndex balance={smart.currentBalance} mealPrice={mealPrice} />}
+          {mealPrice && <MealIndex balance={safeToSpendBalance} mealPrice={mealPrice} />}
         </CardContent>
       </Card>
 
@@ -403,10 +486,15 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div
-              className={`text-xl sm:text-2xl font-semibold ${incomeTotal - expenseTotal >= 0 ? "text-emerald-600" : "text-destructive"}`}
+              className={`text-xl sm:text-2xl font-semibold ${totalBalance >= 0 ? "text-emerald-600" : "text-destructive"}`}
             >
-              {formatTRY(incomeTotal - expenseTotal)}
+              {formatTRY(totalBalance)}
             </div>
+            {unpaidPaymentsTotal > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Rezerve edilmiş: <span className="font-medium">{formatTRY(unpaidPaymentsTotal)}</span>
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               {monthlyBudgetGoal
                 ? `Hedef: ${formatTRY(monthlyBudgetGoal)}`
@@ -469,6 +557,29 @@ export default async function DashboardPage() {
             <div className="flex flex-col items-center gap-4 py-8 text-center">
               <p className="text-sm text-muted-foreground">Henüz işlem yok.</p>
               <QuickAddTransactionDialog />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 sm:pb-3">
+          <CardTitle className="text-base sm:text-lg">Gelecek Ödemelerim</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="border-b pb-4">
+            <AddPaymentForm />
+          </div>
+          <PaymentsList payments={payments} analysisInput={paymentAnalysisInput} />
+          {unpaidPaymentsTotal > 0 && (
+            <div className="border-t pt-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-foreground">Toplam Ödenmemiş</span>
+                <span className="font-semibold text-foreground">{formatTRY(unpaidPaymentsTotal)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Bu tutar bütçenizden düşülmüştür.
+              </p>
             </div>
           )}
         </CardContent>
