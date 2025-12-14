@@ -627,4 +627,148 @@ grant execute on function public.check_rate_limit(text, integer, integer) to ano
 -- )
 -- on conflict (id) do nothing;
 
+-- ---------------------------------------------------------------------------
+-- Upcoming Payments (Gelecek Ödemeler)
+-- ---------------------------------------------------------------------------
+-- Kullanıcıların gelecekteki ödemelerini (yurt, kira, fatura vb.) takip eder.
+-- Bu ödemeler henüz ödenmemiş olsa bile bütçe hesaplamalarına dahil edilir.
+-- Sistem, mevcut harcama trendine göre ödemeyi karşılayamayacağını uyarır.
+
+create table if not exists public.upcoming_payments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  name text not null check (length(name) > 0 and length(name) <= 200),
+  amount numeric not null check (amount > 0),
+  due_date date not null,
+  is_paid boolean not null default false,
+  paid_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists upcoming_payments_user_id_idx on public.upcoming_payments (user_id);
+create index if not exists upcoming_payments_user_id_due_date_idx on public.upcoming_payments (user_id, due_date asc);
+create index if not exists upcoming_payments_user_id_is_paid_idx on public.upcoming_payments (user_id, is_paid) where (is_paid = false);
+
+-- Auto-update updated_at timestamp
+create or replace function public.update_upcoming_payments_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$;
+
+drop trigger if exists upcoming_payments_update_updated_at on public.upcoming_payments;
+create trigger upcoming_payments_update_updated_at
+  before update on public.upcoming_payments
+  for each row
+  execute procedure public.update_upcoming_payments_updated_at();
+
+-- Auto-set paid_at when is_paid changes to true
+create or replace function public.set_upcoming_payment_paid_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.is_paid = true and (old.is_paid is null or old.is_paid = false) then
+    new.paid_at = timezone('utc'::text, now());
+  elsif new.is_paid = false then
+    new.paid_at = null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists upcoming_payments_set_paid_at on public.upcoming_payments;
+create trigger upcoming_payments_set_paid_at
+  before insert or update on public.upcoming_payments
+  for each row
+  execute procedure public.set_upcoming_payment_paid_at();
+
+-- RLS Policies for upcoming_payments
+alter table public.upcoming_payments enable row level security;
+
+drop policy if exists "upcoming_payments_select_own" on public.upcoming_payments;
+create policy "upcoming_payments_select_own" on public.upcoming_payments
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "upcoming_payments_insert_own" on public.upcoming_payments;
+create policy "upcoming_payments_insert_own" on public.upcoming_payments
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "upcoming_payments_update_own" on public.upcoming_payments;
+create policy "upcoming_payments_update_own" on public.upcoming_payments
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "upcoming_payments_delete_own" on public.upcoming_payments;
+create policy "upcoming_payments_delete_own" on public.upcoming_payments
+  for delete using (auth.uid() = user_id);
+
+-- RPC Function: Get total unpaid upcoming payments amount
+create or replace function public.get_unpaid_upcoming_payments_total(
+  p_user_id uuid default auth.uid()
+)
+returns numeric
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select coalesce(sum(amount), 0)
+  from public.upcoming_payments
+  where user_id = p_user_id
+    and is_paid = false
+    and due_date >= current_date;
+$$;
+
+grant execute on function public.get_unpaid_upcoming_payments_total(uuid) to authenticated;
+
+-- RPC Function: Get upcoming payments with payment feasibility analysis
+create or replace function public.get_upcoming_payments_with_analysis(
+  p_user_id uuid default auth.uid()
+)
+returns table (
+  id uuid,
+  name text,
+  amount numeric,
+  due_date date,
+  is_paid boolean,
+  paid_at timestamptz,
+  created_at timestamptz,
+  updated_at timestamptz,
+  days_until_due integer,
+  total_unpaid_amount numeric
+)
+language plpgsql
+stable
+security invoker
+set search_path = public
+as $$
+declare
+  v_today date := current_date;
+begin
+  return query
+  select
+    up.id,
+    up.name,
+    up.amount,
+    up.due_date,
+    up.is_paid,
+    up.paid_at,
+    up.created_at,
+    up.updated_at,
+    (up.due_date - v_today)::integer as days_until_due,
+    (select coalesce(sum(up2.amount), 0) from public.upcoming_payments up2 where up2.user_id = p_user_id and up2.is_paid = false and up2.due_date >= v_today) as total_unpaid_amount
+  from public.upcoming_payments up
+  where up.user_id = p_user_id
+    and (up.is_paid = false or up.due_date >= v_today - interval '30 days')
+  order by up.due_date asc, up.created_at asc;
+end;
+$$;
+
+grant execute on function public.get_upcoming_payments_with_analysis(uuid) to authenticated;
+
 
