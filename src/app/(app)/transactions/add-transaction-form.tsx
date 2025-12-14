@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, type TransactionCategory } from "@/features/transactions/categories";
-import { getCategoryMeta } from "@/features/transactions/category-meta";
+import TransactionCategoryPicker from "@/features/transactions/category-picker";
 import {
   createTransactionSchema,
   type CreateTransactionFormInput,
@@ -101,7 +101,7 @@ export default function AddTransactionForm({ defaultDate }: Props) {
         <Input
           id="amount"
           inputMode="decimal"
-          placeholder="0"
+          placeholder="Örn: 120"
           {...form.register("amount")}
         />
         {form.formState.errors.amount?.message ? (
@@ -114,24 +114,13 @@ export default function AddTransactionForm({ defaultDate }: Props) {
       <div className="grid gap-2">
         <Label htmlFor="category">Kategori</Label>
         <input id="category" type="hidden" {...form.register("category")} />
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {(type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((category) => {
-            const { Icon, label } = getCategoryMeta(category as TransactionCategory);
-            const isSelected = selectedCategory === category;
-            return (
-              <Button
-                key={category}
-                type="button"
-                variant={isSelected ? "default" : "outline"}
-                className="justify-start"
-                onClick={() => form.setValue("category", category as TransactionCategory, { shouldValidate: true })}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                <span className="truncate">{label}</span>
-              </Button>
-            );
-          })}
-        </div>
+        <TransactionCategoryPicker
+          type={type}
+          value={(selectedCategory as TransactionCategory) ?? DEFAULT_EXPENSE_CATEGORY}
+          onChange={(category) =>
+            form.setValue("category", category as TransactionCategory, { shouldValidate: true })
+          }
+        />
         {form.formState.errors.category?.message ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formState.errors.category.message}

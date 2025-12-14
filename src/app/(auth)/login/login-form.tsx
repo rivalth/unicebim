@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useForm } from "react-hook-form";
@@ -16,6 +17,7 @@ export default function LoginForm() {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -69,12 +71,26 @@ export default function LoginForm() {
 
       <div className="space-y-2">
         <Label htmlFor="password">Parola</Label>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          {...form.register("password")}
-        />
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            className="pr-10"
+            {...form.register("password")}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Parolayı gizle" : "Parolayı göster"}
+            aria-pressed={showPassword}
+          >
+            {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+          </Button>
+        </div>
         {form.formState.errors.password?.message ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formState.errors.password.message}

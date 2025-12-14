@@ -24,7 +24,7 @@ import {
   INCOME_CATEGORIES,
   type TransactionCategory,
 } from "@/features/transactions/categories";
-import { getCategoryMeta } from "@/features/transactions/category-meta";
+import TransactionCategoryPicker from "@/features/transactions/category-picker";
 import { createTransactionSchema, type CreateTransactionFormInput } from "@/features/transactions/schemas";
 
 const DEFAULT_EXPENSE_CATEGORY: TransactionCategory = "Beslenme";
@@ -117,7 +117,12 @@ export default function QuickAddTransactionDialog() {
         <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
           <div className="grid gap-2">
             <Label htmlFor="amount">Tutar</Label>
-            <Input id="amount" inputMode="decimal" placeholder="0" {...form.register("amount")} />
+            <Input
+              id="amount"
+              inputMode="decimal"
+              placeholder="Örn: 120"
+              {...form.register("amount")}
+            />
             {form.formState.errors.amount?.message ? (
               <p className="text-sm text-destructive" role="alert">
                 {form.formState.errors.amount.message}
@@ -149,28 +154,13 @@ export default function QuickAddTransactionDialog() {
             <Label htmlFor="category">Kategori</Label>
             <input id="category" type="hidden" {...form.register("category")} />
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {(type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((category) => {
-                const { Icon, label } = getCategoryMeta(category as TransactionCategory);
-                const isSelected = selectedCategory === category;
-                return (
-                  <Button
-                    key={category}
-                    type="button"
-                    variant={isSelected ? "default" : "outline"}
-                    className="justify-start"
-                    onClick={() =>
-                      form.setValue("category", category as TransactionCategory, {
-                        shouldValidate: true,
-                      })
-                    }
-                  >
-                    <Icon className="size-4" aria-hidden="true" />
-                    <span className="truncate">{label}</span>
-                  </Button>
-                );
-              })}
-            </div>
+            <TransactionCategoryPicker
+              type={type}
+              value={(selectedCategory as TransactionCategory) ?? DEFAULT_EXPENSE_CATEGORY}
+              onChange={(category) =>
+                form.setValue("category", category as TransactionCategory, { shouldValidate: true })
+              }
+            />
             {form.formState.errors.category?.message ? (
               <p className="text-sm text-destructive" role="alert">
                 {form.formState.errors.category.message}

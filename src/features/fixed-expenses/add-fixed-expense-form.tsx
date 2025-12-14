@@ -87,7 +87,7 @@ export default function AddFixedExpenseForm({ onSuccess }: Props) {
         <Input
           id="amount"
           inputMode="decimal"
-          placeholder="0"
+          placeholder="Örn: 2500"
           {...form.register("amount")}
         />
         {form.formState.errors.amount?.message ? (
