@@ -1,10 +1,13 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import * as React from "react";
 import { Trash2, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
-import { deleteFixedExpenseAction } from "@/app/actions/fixed-expenses";
+import { deleteFixedExpenseAction, updateFixedExpenseAction } from "@/app/actions/fixed-expenses";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -16,6 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { formatTRY } from "@/lib/money";
+import { type UpdateFixedExpenseFormInput, updateFixedExpenseSchema } from "@/features/fixed-expenses/schemas";
 
 type FixedExpense = {
   id: string;
@@ -25,21 +33,36 @@ type FixedExpense = {
 
 type Props = {
   expenses: FixedExpense[];
-  onEdit?: (expense: FixedExpense) => void;
+  total?: number | null; // Optional: if provided, use DB-calculated total instead of client-side reduce
 };
 
-function formatTRY(amount: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-export default function FixedExpensesList({ expenses, onEdit }: Props) {
+export default function FixedExpensesList({ expenses, total: dbTotal }: Props) {
   const router = useRouter();
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [editing, setEditing] = React.useState<FixedExpense | null>(null);
+  const [isEditOpen, setEditOpen] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  const form = useForm<UpdateFixedExpenseFormInput>({
+    resolver: zodResolver(updateFixedExpenseSchema),
+    defaultValues: {
+      id: "",
+      name: "",
+      amount: "",
+    },
+  });
+
+  React.useEffect(() => {
+    if (!editing) return;
+    setEditError(null);
+    form.reset({
+      id: editing.id,
+      name: editing.name,
+      amount: String(editing.amount),
+    });
+  }, [editing, form]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -50,20 +73,53 @@ export default function FixedExpensesList({ expenses, onEdit }: Props) {
 
     if (result.ok) {
       setDeleteId(null);
+      toast.success("Sabit gider silindi.");
       router.refresh();
     } else {
-      // TODO: Show error toast
-      console.error("Delete failed:", result.message);
+      toast.error(result.message);
+    }
+  };
+
+  const handleEditSubmit = async (values: UpdateFixedExpenseFormInput) => {
+    setEditError(null);
+    form.clearErrors();
+    setIsSaving(true);
+
+    try {
+      const result = await updateFixedExpenseAction(values);
+      if (!result.ok) {
+        setEditError(result.message);
+        const fieldErrors = result.fieldErrors ?? {};
+        for (const [field, messages] of Object.entries(fieldErrors)) {
+          if (!messages?.length) continue;
+          form.setError(field as keyof UpdateFixedExpenseFormInput, { message: messages[0] });
+        }
+        return;
+      }
+
+      toast.success("Sabit gider güncellendi.");
+      setEditOpen(false);
+      setEditing(null);
+      router.refresh();
+    } finally {
+      setIsSaving(false);
     }
   };
 
   if (expenses.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">Henüz sabit gider eklenmemiş.</p>
+      <div className="flex flex-col items-center gap-4 py-8 text-center">
+        <p className="text-sm text-muted-foreground">Henüz sabit gider eklenmemiş.</p>
+        <p className="text-xs text-muted-foreground">
+          Kira, abonelik ve telefon gibi sabit giderlerini ekleyerek bütçe planlamanı yapabilirsin.
+        </p>
+      </div>
     );
   }
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  // Prefer DB-calculated total (from monthly_fixed_expenses) over client-side reduce
+  // This ensures consistency with the database trigger and avoids potential race conditions
+  const total = dbTotal ?? expenses.reduce((sum, e) => sum + e.amount, 0);
 
   return (
     <>
@@ -78,17 +134,18 @@ export default function FixedExpensesList({ expenses, onEdit }: Props) {
               <div className="text-sm text-muted-foreground">{formatTRY(expense.amount)}</div>
             </div>
             <div className="flex items-center gap-2">
-              {onEdit ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onEdit(expense)}
-                  aria-label="Düzenle"
-                >
-                  <Pencil className="size-4" aria-hidden="true" />
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setEditing(expense);
+                  setEditOpen(true);
+                }}
+                aria-label="Düzenle"
+              >
+                <Pencil className="size-4" aria-hidden="true" />
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
@@ -126,6 +183,60 @@ export default function FixedExpensesList({ expenses, onEdit }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) setEditing(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Sabit gideri düzenle</DialogTitle>
+            <DialogDescription>Ad ve tutarı güncelle, sonra kaydet.</DialogDescription>
+          </DialogHeader>
+
+          <form className="grid gap-4" onSubmit={form.handleSubmit(handleEditSubmit)}>
+            <input type="hidden" {...form.register("id")} />
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit-fixed-name">Gider adı</Label>
+              <Input id="edit-fixed-name" placeholder="Örn: Kira" {...form.register("name")} />
+              {form.formState.errors.name?.message ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {form.formState.errors.name.message}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit-fixed-amount">Tutar (₺)</Label>
+              <Input
+                id="edit-fixed-amount"
+                inputMode="decimal"
+                placeholder="Örn: 2500"
+                {...form.register("amount")}
+              />
+              {form.formState.errors.amount?.message ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {form.formState.errors.amount.message}
+                </p>
+              ) : null}
+            </div>
+
+            {editError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {editError}
+              </p>
+            ) : null}
+
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Kaydediliyor..." : "Kaydet"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
