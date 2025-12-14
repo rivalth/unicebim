@@ -3,12 +3,15 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnimatedContainer } from "./animated-container";
 import { logger } from "@/lib/logger";
+import { formatTRY } from "@/lib/money";
 import { toFiniteNumber } from "@/lib/number";
-import { isMissingTableError } from "@/lib/supabase/errors";
+import { mapProfileRow, mapTransactionRow, normalizeTransactionAmount } from "@/lib/supabase/mappers";
+import { isMissingRpcFunctionError, isMissingTableError } from "@/lib/supabase/errors";
 import { createSupabaseServerClient, getCachedUser } from "@/lib/supabase/server";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import { calculateMonthlySummary } from "@/features/transactions/summary";
-import TransactionHistory from "@/features/transactions/transaction-history";
+import TransactionHistoryPaginated from "@/features/transactions/transaction-history-paginated";
+import { encodeTxCursor } from "@/lib/pagination/tx-cursor";
 
 import AddTransactionForm from "./add-transaction-form";
 import MonthPicker from "./month-picker";
@@ -19,12 +22,24 @@ function parseMonthParam(value: unknown): {
   label: string;
   ymd: string;
   ym: string;
+  invalidParam: boolean;
 } {
   const now = new Date();
   const fallbackStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const fallbackEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const formatter = new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" });
   const todayYmd = now.toISOString().slice(0, 10);
+
+  if (value == null || value === "") {
+    return {
+      start: fallbackStart,
+      end: fallbackEnd,
+      label: formatter.format(fallbackStart),
+      ymd: todayYmd,
+      ym: fallbackStart.toISOString().slice(0, 7),
+      invalidParam: false,
+    };
+  }
 
   if (typeof value !== "string" || !/^\d{4}-\d{2}$/.test(value)) {
     return {
@@ -33,6 +48,7 @@ function parseMonthParam(value: unknown): {
       label: formatter.format(fallbackStart),
       ymd: todayYmd,
       ym: fallbackStart.toISOString().slice(0, 7),
+      invalidParam: typeof value === "string",
     };
   }
 
@@ -46,6 +62,7 @@ function parseMonthParam(value: unknown): {
       label: formatter.format(fallbackStart),
       ymd: todayYmd,
       ym: fallbackStart.toISOString().slice(0, 7),
+      invalidParam: true,
     };
   }
 
@@ -60,15 +77,8 @@ function parseMonthParam(value: unknown): {
     label: formatter.format(start),
     ymd: withinSelectedMonth ? todayYmd : start.toISOString().slice(0, 10),
     ym: start.toISOString().slice(0, 7),
+    invalidParam: false,
   };
-}
-
-function formatTRY(amount: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 2,
-  }).format(amount);
 }
 
 export default async function TransactionsPage({
@@ -79,6 +89,7 @@ export default async function TransactionsPage({
     | Record<string, string | string[] | undefined>
     | Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const PAGE_SIZE = 50;
   const sp = await Promise.resolve(searchParams);
   const monthParam = typeof sp?.month === "string" ? sp.month : undefined;
   const month = parseMonthParam(monthParam);
@@ -93,10 +104,10 @@ export default async function TransactionsPage({
   const supabase = await createSupabaseServerClient();
 
   // Execute database queries in parallel
-  const [profileResult, fixedExpensesResult, transactionsResult] = await Promise.all([
+  const [profileResult, fixedExpensesResult, transactionsResult, summaryResult] = await Promise.all([
     supabase
       .from("profiles")
-      .select("monthly_budget_goal, monthly_fixed_expenses")
+      .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -110,12 +121,19 @@ export default async function TransactionsPage({
       .eq("user_id", user.id)
       .gte("date", month.start.toISOString())
       .lt("date", month.end.toISOString())
-      .order("date", { ascending: false }),
+      .order("date", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(PAGE_SIZE + 1),
+    supabase.rpc("get_monthly_summary", {
+      p_start: month.start.toISOString(),
+      p_end: month.end.toISOString(),
+    }),
   ]);
 
   const { data: profile, error: profileError } = profileResult;
   const { data: fixedExpensesRaw, error: fixedExpensesError } = fixedExpensesResult;
   const { data: txRaw, error: txError } = transactionsResult;
+  const { data: summaryRows, error: summaryError } = summaryResult;
 
   if (profileError) {
     logger.warn("Transactions.profile select failed", {
@@ -197,24 +215,70 @@ export default async function TransactionsPage({
     );
   }
 
-  const transactions = (txRaw ?? []).map((t) => {
-    const rawAmount = (t as unknown as { amount: unknown }).amount;
-    const amount = typeof rawAmount === "number" ? rawAmount : Number(rawAmount);
-    return {
-      ...t,
-      amount: Number.isFinite(amount) ? amount : 0,
-    };
-  });
+  const transactionsAll = (txRaw ?? []).map(mapTransactionRow);
 
-  const summary = calculateMonthlySummary(
-    transactions.map((t) => ({ amount: t.amount, type: t.type })),
-  );
+  const hasMore = transactionsAll.length > PAGE_SIZE;
+  const transactions = hasMore ? transactionsAll.slice(0, PAGE_SIZE) : transactionsAll;
+  const nextCursor =
+    hasMore && transactions.length > 0
+      ? encodeTxCursor({ id: transactions[transactions.length - 1]!.id, date: transactions[transactions.length - 1]!.date })
+      : null;
 
-  const monthlyBudgetGoal = toFiniteNumber(
-    (profile as unknown as { monthly_budget_goal?: unknown })?.monthly_budget_goal,
-  );
+  const summaryFromDb = summaryRows?.[0];
+  const summary =
+    summaryFromDb && !summaryError
+      ? {
+          incomeTotal: toFiniteNumber(
+            (summaryFromDb as unknown as { income_total?: unknown }).income_total,
+          ) ?? 0,
+          expenseTotal: toFiniteNumber(
+            (summaryFromDb as unknown as { expense_total?: unknown }).expense_total,
+          ) ?? 0,
+          netTotal: toFiniteNumber(
+            (summaryFromDb as unknown as { net_total?: unknown }).net_total,
+          ) ?? 0,
+        }
+      : null;
+
+  if (summaryError) {
+    const ctx = { code: summaryError.code, message: summaryError.message };
+    if (isMissingRpcFunctionError(summaryError)) {
+      logger.warn("Transactions.get_monthly_summary missing (fallback)", ctx);
+    } else {
+      logger.error("Transactions.get_monthly_summary failed (fallback)", ctx);
+    }
+  }
+
+  let finalSummary = summary;
+
+  if (!finalSummary) {
+    // Accurate fallback when DB RPC is missing/unavailable.
+    const { data: allRaw, error: allError } = await supabase
+      .from("transactions")
+      .select("amount, type")
+      .eq("user_id", user.id)
+      .gte("date", month.start.toISOString())
+      .lt("date", month.end.toISOString());
+
+    if (allError) {
+      logger.error("Transactions.summary fallback select failed", {
+        code: allError.code,
+        message: allError.message,
+      });
+      finalSummary = { incomeTotal: 0, expenseTotal: 0, netTotal: 0 };
+    } else {
+      const txForSummary = (allRaw ?? []).map((t) => ({
+        amount: normalizeTransactionAmount((t as unknown as { amount: unknown }).amount),
+        type: t.type,
+      }));
+      finalSummary = calculateMonthlySummary(txForSummary);
+    }
+  }
+
+  const normalizedProfile = mapProfileRow(profile);
+  const monthlyBudgetGoal = normalizedProfile?.monthly_budget_goal ?? null;
   const remaining =
-    monthlyBudgetGoal == null ? null : monthlyBudgetGoal - summary.expenseTotal;
+    monthlyBudgetGoal == null ? null : monthlyBudgetGoal - finalSummary.expenseTotal;
 
   return (
     <AnimatedContainer className="space-y-8">
@@ -232,13 +296,30 @@ export default async function TransactionsPage({
         </div>
       </div>
 
+      {month.invalidParam ? (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle>Geçersiz ay parametresi</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              URL’deki <span className="font-medium text-foreground">month</span> parametresi geçersiz.
+              Varsayılan olarak bu ay gösteriliyor.
+            </p>
+            <Link className="underline underline-offset-4" href="/transactions">
+              Parametreyi temizle
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <AnimatedContainer className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Gelir</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            {formatTRY(summary.incomeTotal)}
+            {formatTRY(finalSummary.incomeTotal, { maximumFractionDigits: 2 })}
           </CardContent>
         </Card>
         <Card>
@@ -246,7 +327,7 @@ export default async function TransactionsPage({
             <CardTitle>Gider</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            {formatTRY(summary.expenseTotal)}
+            {formatTRY(finalSummary.expenseTotal, { maximumFractionDigits: 2 })}
           </CardContent>
         </Card>
         <Card>
@@ -254,7 +335,7 @@ export default async function TransactionsPage({
             <CardTitle>Net</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            {formatTRY(summary.netTotal)}
+            {formatTRY(finalSummary.netTotal, { maximumFractionDigits: 2 })}
           </CardContent>
         </Card>
       </AnimatedContainer>
@@ -272,12 +353,13 @@ export default async function TransactionsPage({
                 name: e.name,
                 amount: typeof e.amount === "number" ? e.amount : Number(e.amount),
               }))}
+              monthlyFixedExpenses={normalizedProfile?.monthly_fixed_expenses ?? null}
             />
             {monthlyBudgetGoal != null ? (
               <p className="text-sm text-muted-foreground">
                 Kalan:{" "}
                 <span className="font-medium text-foreground">
-                  {formatTRY(remaining ?? 0)}
+                  {formatTRY(remaining ?? 0, { maximumFractionDigits: 2 })}
                 </span>
               </p>
             ) : null}
@@ -299,7 +381,12 @@ export default async function TransactionsPage({
           <CardTitle>Bu ayın işlemleri</CardTitle>
         </CardHeader>
         <CardContent>
-          <TransactionHistory transactions={transactions} />
+          <TransactionHistoryPaginated
+            month={month.ym}
+            initialTransactions={transactions}
+            initialNextCursor={nextCursor}
+            pageSize={PAGE_SIZE}
+          />
         </CardContent>
       </Card>
     </AnimatedContainer>
