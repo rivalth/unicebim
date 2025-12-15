@@ -5,8 +5,11 @@ import { Eye, EyeOff } from "lucide-react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 
+import Link from "next/link";
+
 import { registerAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type RegisterInput, registerSchema } from "@/features/auth/schemas";
@@ -25,6 +28,7 @@ export default function RegisterForm() {
       email: "",
       password: "",
       passwordConfirm: "",
+      acceptTerms: false,
     },
   });
 
@@ -167,6 +171,37 @@ export default function RegisterForm() {
         {form.formState.errors.passwordConfirm?.message ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formState.errors.passwordConfirm.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="acceptTerms"
+            type="checkbox"
+            className="mt-0.5"
+            {...form.register("acceptTerms")}
+          />
+          <Label
+            htmlFor="acceptTerms"
+            className="text-sm font-normal leading-normal cursor-pointer"
+          >
+            <span>
+              <Link href="/privacy" className="underline hover:text-foreground" target="_blank">
+                Gizlilik Politikası
+              </Link>
+              {" ve "}
+              <Link href="/terms" className="underline hover:text-foreground" target="_blank">
+                Kullanım Şartları
+              </Link>
+              &apos;nı okudum ve kabul ediyorum.
+            </span>
+          </Label>
+        </div>
+        {form.formState.errors.acceptTerms?.message ? (
+          <p className="text-sm text-destructive" role="alert">
+            {form.formState.errors.acceptTerms.message}
           </p>
         ) : null}
       </div>

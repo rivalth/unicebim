@@ -33,6 +33,9 @@ export function PublicHeader() {
             <Link href="/#faq">SSS</Link>
           </Button>
           <Button asChild variant="ghost" size="sm">
+            <Link href="/about">Hakkımızda</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
             <Link href="/login">Giriş</Link>
           </Button>
           <Button asChild size="sm">
@@ -82,6 +85,15 @@ export function PublicHeader() {
               onClick={() => setMobileMenuOpen(false)}
             >
               <Link href="/#faq">SSS</Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Link href="/about">Hakkımızda</Link>
             </Button>
             <Button
               asChild

@@ -19,6 +19,9 @@ export const registerSchema = z
     email: z.string().trim().min(1).email(),
     password: z.string().min(8, "Parola en az 8 karakter olmalı."),
     passwordConfirm: z.string().min(8),
+    acceptTerms: z.boolean().refine((v) => v === true, {
+      message: "Gizlilik politikası ve kullanım şartlarını kabul etmelisiniz.",
+    }),
   })
   .refine((v) => v.password === v.passwordConfirm, {
     message: "Parolalar eşleşmiyor.",
