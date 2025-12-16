@@ -65,6 +65,9 @@ export default async function AppLayout({
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard/reports">Raporlar</Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/subscriptions">Abonelikler</Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 

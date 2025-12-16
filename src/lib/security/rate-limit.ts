@@ -20,6 +20,7 @@ export type RateLimitScope =
   | "fixed_expenses.write"
   | "wallets.write"
   | "payments.write"
+  | "subscriptions.write"
   | "report.generate";
 
 export const rateLimitPolicies: Record<RateLimitScope, RateLimitPolicy> = {
@@ -31,6 +32,7 @@ export const rateLimitPolicies: Record<RateLimitScope, RateLimitPolicy> = {
   "fixed_expenses.write": { limit: 30, windowSeconds: 60 },
   "wallets.write": { limit: 30, windowSeconds: 60 },
   "payments.write": { limit: 30, windowSeconds: 60 },
+  "subscriptions.write": { limit: 30, windowSeconds: 60 },
   "report.generate": { limit: 10, windowSeconds: 3600 }, // 10 reports per hour
 };
 

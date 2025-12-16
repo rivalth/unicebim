@@ -6,6 +6,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { useRouter } from "next/navigation";
 
 import { createTransactionAction } from "@/app/actions/transactions";
+import { createSubscriptionAction } from "@/app/actions/subscriptions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import {
   createTransactionSchema,
   type CreateTransactionFormInput,
 } from "@/features/transactions/schemas";
+import { detectSubscriptionService, getBrandIcon } from "@/lib/brand-icon";
 
 type Props = {
   defaultDate: string; // YYYY-MM-DD
@@ -28,6 +30,9 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const [showSubscriptionPrompt, setShowSubscriptionPrompt] = React.useState(false);
+  const [detectedService, setDetectedService] = React.useState<string | null>(null);
+  const [isCreatingSubscription, setIsCreatingSubscription] = React.useState(false);
 
   const form = useForm<CreateTransactionFormInput>({
     resolver: zodResolver(createTransactionSchema),
@@ -41,6 +46,7 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
 
   const type = useWatch({ control: form.control, name: "type" });
   const selectedCategory = useWatch({ control: form.control, name: "category" });
+  const description = useWatch({ control: form.control, name: "description" });
 
   React.useEffect(() => {
     const current = form.getValues("category");
@@ -56,6 +62,57 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
       }
     }
   }, [form, type]);
+
+  // Smart detection: Check if description contains a popular subscription service
+  React.useEffect(() => {
+    if (type !== "expense" || !description || description.trim().length === 0) {
+      setShowSubscriptionPrompt(false);
+      setDetectedService(null);
+      return;
+    }
+
+    const service = detectSubscriptionService(description);
+    if (service) {
+      setDetectedService(service);
+      setShowSubscriptionPrompt(true);
+    } else {
+      setShowSubscriptionPrompt(false);
+      setDetectedService(null);
+    }
+  }, [description, type]);
+
+  const handleCreateSubscription = async (values: CreateTransactionFormInput) => {
+    setIsCreatingSubscription(true);
+    try {
+      // Get icon for the subscription
+      const iconUrl = await getBrandIcon(values.description || "");
+
+      // Calculate next renewal date: 1 month from transaction date (default monthly)
+      const transactionDate = new Date(values.date);
+      const nextRenewalDate = new Date(transactionDate);
+      nextRenewalDate.setMonth(transactionDate.getMonth() + 1);
+
+      const subscriptionResult = await createSubscriptionAction({
+        name: values.description || detectedService || "Abonelik",
+        amount: values.amount,
+        currency: "TL",
+        billing_cycle: "monthly",
+        next_renewal_date: nextRenewalDate.toISOString().split("T")[0]!,
+        icon_url: iconUrl,
+        is_active: true,
+      });
+
+      if (!subscriptionResult.ok) {
+        // If subscription creation fails, still create the transaction
+        console.warn("Subscription creation failed:", subscriptionResult.message);
+      }
+    } catch (error) {
+      // Silently fail - subscription creation is optional
+      console.warn("Failed to create subscription:", error);
+    } finally {
+      setIsCreatingSubscription(false);
+    }
+  };
 
   const onSubmit = (values: CreateTransactionFormInput) => {
     setServerError(null);
@@ -73,6 +130,13 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
         return;
       }
 
+      // If subscription prompt was shown and user wants to create subscription
+      // (This will be handled by a separate button/action in the UI)
+      // For now, we'll create subscription automatically if detected
+      if (showSubscriptionPrompt && detectedService && type === "expense") {
+        await handleCreateSubscription(values);
+      }
+
       form.reset({
         amount: "",
         type: "expense",
@@ -80,6 +144,8 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
         date: defaultDate,
         description: null,
       });
+      setShowSubscriptionPrompt(false);
+      setDetectedService(null);
       router.refresh();
       // Call onSuccess callback if provided (e.g., to close modal)
       onSuccess?.();
@@ -157,6 +223,16 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
             {form.formState.errors.description.message}
           </p>
         ) : null}
+        {showSubscriptionPrompt && detectedService && type === "expense" && (
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+            <p className="font-medium text-primary">
+              Bu bir abonelik gibi görünüyor: <span className="capitalize">{detectedService}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              İşlemi kaydettiğinde bu abonelik otomatik olarak abonelikler listesine eklenecek.
+            </p>
+          </div>
+        )}
       </div>
 
       {serverError ? (
@@ -165,8 +241,8 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
         </p>
       ) : null}
 
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Kaydediliyor..." : "Ekle"}
+      <Button type="submit" disabled={isPending || isCreatingSubscription}>
+        {isPending || isCreatingSubscription ? "Kaydediliyor..." : "Ekle"}
       </Button>
     </form>
   );

@@ -13,6 +13,7 @@ export type Json =
  * - `profiles`
  * - `transactions`
  * - `upcoming_payments`
+ * - `subscriptions`
  *
  * Note: Supabase/PostgREST may serialize some Postgres types (e.g. `numeric`)
  * as strings at runtime depending on configuration. We treat `numeric` fields as
@@ -76,6 +77,56 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "fixed_expenses_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          amount: number;
+          currency: string;
+          billing_cycle: "monthly" | "yearly";
+          next_renewal_date: string; // YYYY-MM-DD format
+          icon_url: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          amount: number;
+          currency?: string;
+          billing_cycle?: "monthly" | "yearly";
+          next_renewal_date: string; // YYYY-MM-DD format
+          icon_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          amount?: number;
+          currency?: string;
+          billing_cycle?: "monthly" | "yearly";
+          next_renewal_date?: string;
+          icon_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";

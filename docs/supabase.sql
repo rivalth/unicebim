@@ -782,4 +782,179 @@ $$;
 
 grant execute on function public.get_upcoming_payments_with_analysis(uuid) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- Subscriptions (Abonelikler)
+-- ---------------------------------------------------------------------------
+-- Kullanıcıların düzenli aboneliklerini (Netflix, Spotify, Kira vb.) takip eder.
+-- Her abonelik için otomatik logo bulma desteği (icon_url) ve yenileme günü takibi.
+
+create table if not exists public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  name text not null check (length(name) > 0 and length(name) <= 200),
+  amount numeric not null check (amount > 0),
+  currency text not null default 'TL' check (length(currency) > 0 and length(currency) <= 10),
+  billing_cycle text not null default 'monthly' check (billing_cycle in ('monthly', 'yearly')),
+  icon_url text, -- Logo URL'i (unavatar.io veya diğer servislerden)
+  is_active boolean not null default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Add next_renewal_date column if it doesn't exist (for existing tables)
+alter table public.subscriptions
+  add column if not exists next_renewal_date date;
+
+-- Migration: If renewal_day column exists, migrate to next_renewal_date
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'subscriptions' and column_name = 'renewal_day'
+  ) then
+    -- Migrate existing data: calculate next_renewal_date from renewal_day
+    update public.subscriptions
+    set next_renewal_date = (
+      case
+        when extract(day from current_date) <= renewal_day then
+          make_date(extract(year from current_date)::integer, extract(month from current_date)::integer, renewal_day)
+        else
+          make_date(
+            case when extract(month from current_date) = 12 then extract(year from current_date)::integer + 1 else extract(year from current_date)::integer end,
+            case when extract(month from current_date) = 12 then 1 else extract(month from current_date)::integer + 1 end,
+            renewal_day
+          )
+      end
+    )
+    where next_renewal_date is null;
+    
+    -- Drop old column
+    alter table public.subscriptions drop column if exists renewal_day;
+  end if;
+end;
+$$;
+
+-- Set default for next_renewal_date if null (for new rows)
+-- Default: 1 month from now
+do $$
+begin
+  update public.subscriptions
+  set next_renewal_date = (current_date + interval '1 month')
+  where next_renewal_date is null;
+end;
+$$;
+
+-- Add NOT NULL constraint after migration
+alter table public.subscriptions
+  alter column next_renewal_date set not null;
+
+create index if not exists subscriptions_user_id_idx on public.subscriptions (user_id);
+create index if not exists subscriptions_user_id_is_active_idx on public.subscriptions (user_id, is_active) where (is_active = true);
+create index if not exists subscriptions_user_id_next_renewal_date_idx on public.subscriptions (user_id, next_renewal_date);
+
+-- Auto-update updated_at timestamp
+create or replace function public.update_subscriptions_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$;
+
+drop trigger if exists subscriptions_update_updated_at on public.subscriptions;
+create trigger subscriptions_update_updated_at
+  before update on public.subscriptions
+  for each row
+  execute procedure public.update_subscriptions_updated_at();
+
+-- RLS Policies for subscriptions
+alter table public.subscriptions enable row level security;
+
+drop policy if exists "subscriptions_select_own" on public.subscriptions;
+create policy "subscriptions_select_own" on public.subscriptions
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "subscriptions_insert_own" on public.subscriptions;
+create policy "subscriptions_insert_own" on public.subscriptions
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "subscriptions_update_own" on public.subscriptions;
+create policy "subscriptions_update_own" on public.subscriptions
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "subscriptions_delete_own" on public.subscriptions;
+create policy "subscriptions_delete_own" on public.subscriptions
+  for delete using (auth.uid() = user_id);
+
+-- RPC Function: Get total monthly subscriptions cost
+create or replace function public.get_monthly_subscriptions_total(
+  p_user_id uuid default auth.uid()
+)
+returns numeric
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select coalesce(
+    sum(
+      case
+        when billing_cycle = 'monthly' then amount
+        when billing_cycle = 'yearly' then amount / 12
+        else 0
+      end
+    ),
+    0
+  )
+  from public.subscriptions
+  where user_id = p_user_id
+    and is_active = true;
+$$;
+
+grant execute on function public.get_monthly_subscriptions_total(uuid) to authenticated;
+
+-- RPC Function: Get upcoming subscription renewals (within next N days)
+-- Drop existing function first if return type changed
+drop function if exists public.get_upcoming_subscription_renewals(uuid, integer);
+
+create or replace function public.get_upcoming_subscription_renewals(
+  p_user_id uuid default auth.uid(),
+  p_days_ahead integer default 7
+)
+returns table (
+  id uuid,
+  name text,
+  amount numeric,
+  currency text,
+  billing_cycle text,
+  next_renewal_date date,
+  icon_url text,
+  days_until_renewal integer
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select
+    s.id,
+    s.name,
+    s.amount,
+    s.currency,
+    s.billing_cycle,
+    s.next_renewal_date,
+    s.icon_url,
+    (s.next_renewal_date - current_date)::integer as days_until_renewal
+  from public.subscriptions s
+  where s.user_id = p_user_id
+    and s.is_active = true
+    and s.next_renewal_date >= current_date
+    and (s.next_renewal_date - current_date)::integer <= p_days_ahead
+  order by s.next_renewal_date asc;
+$$;
+
+grant execute on function public.get_upcoming_subscription_renewals(uuid, integer) to authenticated;
+
 

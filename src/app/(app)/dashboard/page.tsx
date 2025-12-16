@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { AlertTriangle, Calendar } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AnimatedContainer } from "./animated-container";
 import { calculateSmartBalance } from "@/features/dashboard/smart-balance";
 import { MealIndex } from "@/features/dashboard/meal-index";
@@ -13,6 +15,7 @@ import TransactionHistory from "@/features/transactions/transaction-history";
 import AddPaymentForm from "@/features/payments/add-payment-form";
 import PaymentsList from "@/features/payments/payments-list";
 import { getUpcomingPaymentsWithAnalysis } from "@/services/payment.service";
+import { getUpcomingSubscriptionRenewals } from "@/services/subscription.service";
 import type { PaymentAnalysisInput } from "@/features/payments/payment-analysis";
 import { logger } from "@/lib/logger";
 import { formatTRY } from "@/lib/money";
@@ -37,7 +40,7 @@ export default async function DashboardPage() {
   const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   // Execute database queries in parallel
-  const [profileResult, fixedExpensesResult, recentTransactionsResult, summaryResult, expenseTotalsResult, walletsResult, paymentsResult] = await Promise.all([
+  const [profileResult, fixedExpensesResult, recentTransactionsResult, summaryResult, expenseTotalsResult, walletsResult, paymentsResult, subscriptionsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date, avatar_url")
@@ -72,6 +75,7 @@ export default async function DashboardPage() {
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: true }),
     getUpcomingPaymentsWithAnalysis("dashboard"),
+    getUpcomingSubscriptionRenewals(7, "dashboard"),
   ]);
 
   const { data: profile, error: profileError } = profileResult;
@@ -81,6 +85,7 @@ export default async function DashboardPage() {
   const { data: expenseTotalsRows, error: expenseTotalsError } = expenseTotalsResult;
   const { data: walletsRaw, error: walletsError } = walletsResult;
   const payments = paymentsResult ?? [];
+  const upcomingSubscriptions = subscriptionsResult ?? [];
 
   if (profileError) {
     logger.warn("Dashboard.profile select failed", {
@@ -356,6 +361,54 @@ export default async function DashboardPage() {
         </h1>
         <p className="text-xs sm:text-sm text-muted-foreground">Bugün ne kadar yiyebilirsin?</p>
       </div>
+
+      {/* Upcoming Subscription Renewals Alert */}
+      {upcomingSubscriptions.length > 0 && (
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="size-4 text-amber-600" />
+          <AlertTitle className="text-amber-900 dark:text-amber-100">Yaklaşan Abonelik Ödemeleri</AlertTitle>
+          <AlertDescription className="mt-2 space-y-2">
+            {upcomingSubscriptions.map((sub) => (
+              <div key={sub.id} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  {sub.icon_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={sub.icon_url}
+                      alt=""
+                      className="size-6 rounded object-contain"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Calendar className="size-4 text-amber-600" aria-hidden="true" />
+                  )}
+                  <span className="font-medium">{sub.name}</span>
+                </div>
+                <div className="text-right">
+                  <div className="font-semibold text-amber-900 dark:text-amber-100">
+                    {formatTRY(sub.amount)} {sub.currency}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {sub.days_until_renewal === 0
+                      ? "Bugün"
+                      : sub.days_until_renewal === 1
+                        ? "Yarın"
+                        : `${sub.days_until_renewal} gün sonra`}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="pt-2">
+              <Link
+                href="/dashboard/subscriptions"
+                className="text-xs font-medium text-amber-900 underline underline-offset-4 hover:text-amber-700 dark:text-amber-100 dark:hover:text-amber-200"
+              >
+                Tüm abonelikleri görüntüle →
+              </Link>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Rezerv Sistemi: Safe-to-Spend Balance Card */}
       <Card
