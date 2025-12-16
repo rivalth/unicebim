@@ -122,7 +122,7 @@ export async function updateSubscriptionAction(
   const ip = getClientIp(h);
   const rl = await checkRateLimit({
     key: buildRateLimitKey({ scope: "subscriptions.write", ip, userId: user.id }),
-    policy: rateLimitPolicies["subscriptions.write"] ?? rateLimitPolicies["default.write"],
+    policy: rateLimitPolicies["subscriptions.write"],
     requestId: originCheck.requestId,
     context: { action: "updateSubscriptionAction", userId: user.id },
   });
@@ -199,7 +199,7 @@ export async function deleteSubscriptionAction(
   const ip = getClientIp(h);
   const rl = await checkRateLimit({
     key: buildRateLimitKey({ scope: "subscriptions.write", ip, userId: user.id }),
-    policy: rateLimitPolicies["subscriptions.write"] ?? rateLimitPolicies["default.write"],
+    policy: rateLimitPolicies["subscriptions.write"],
     requestId: originCheck.requestId,
     context: { action: "deleteSubscriptionAction", userId: user.id },
   });

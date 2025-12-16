@@ -333,6 +333,28 @@ export interface Database {
           total_unpaid_amount: number;
         }>;
       };
+      get_monthly_subscriptions_total: {
+        Args: {
+          p_user_id?: string | null;
+        };
+        Returns: number;
+      };
+      get_upcoming_subscription_renewals: {
+        Args: {
+          p_user_id?: string | null;
+          p_days_ahead?: number | null;
+        };
+        Returns: Array<{
+          id: string;
+          name: string;
+          amount: number;
+          currency: string;
+          billing_cycle: "monthly" | "yearly";
+          next_renewal_date: string;
+          icon_url: string | null;
+          days_until_renewal: number;
+        }>;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
