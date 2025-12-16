@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 import { createServerClient } from "@supabase/ssr";
-import { envPublic } from "@/lib/env/public";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -19,9 +18,18 @@ export async function middleware(request: NextRequest) {
   const response = await updateSupabaseSession(request);
 
   // Create Supabase client to check auth state
+  // Use process.env directly in middleware (edge runtime compatible)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Return response without auth check if env vars are missing
+    return response;
+  }
+
   const supabase = createServerClient<Database>(
-    envPublic.NEXT_PUBLIC_SUPABASE_URL,
-    envPublic.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
