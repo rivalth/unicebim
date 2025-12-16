@@ -7,7 +7,14 @@ import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 
-export function PublicHeader() {
+interface PublicHeaderProps {
+  /**
+   * Whether the user is authenticated (has an active session).
+   */
+  isAuthenticated?: boolean;
+}
+
+export function PublicHeader({ isAuthenticated = false }: PublicHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -35,12 +42,20 @@ export function PublicHeader() {
           <Button asChild variant="ghost" size="sm">
             <Link href="/about">Hakkımızda</Link>
           </Button>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/login">Giriş</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/register">Kayıt ol</Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button asChild size="sm">
+              <Link href="/dashboard">Yönetim Paneli</Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/login">Giriş</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/register">Kayıt ol</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
@@ -95,23 +110,36 @@ export function PublicHeader() {
             >
               <Link href="/about">Hakkımızda</Link>
             </Button>
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Link href="/login">Giriş</Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              className="w-full justify-start"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Link href="/register">Kayıt ol</Link>
-            </Button>
+            {isAuthenticated ? (
+              <Button
+                asChild
+                size="sm"
+                className="w-full justify-start"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Link href="/dashboard">Yönetim Paneli</Link>
+              </Button>
+            ) : (
+              <>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Link href="/login">Giriş</Link>
+                </Button>
+                <Button
+                  asChild
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Link href="/register">Kayıt ol</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}

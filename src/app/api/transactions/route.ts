@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     p_cursor_date: cursor?.date ?? null,
     p_cursor_id: cursor?.id ?? null,
   })) as {
-    data: Array<{ id: string; amount: unknown; type: "income" | "expense"; category: string; date: string }> | null;
+    data: Array<{ id: string; amount: unknown; type: "income" | "expense"; category: string; date: string; description: string | null }> | null;
     error: { code?: string; message?: string } | null;
   };
 
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     filteredTxRaw = filteredTxRaw.filter((t) => t.type === typeParam);
   }
 
-  let txRaw: Array<{ id: string; amount: unknown; type: "income" | "expense"; category: string; date: string }> =
+  let txRaw: Array<{ id: string; amount: unknown; type: "income" | "expense"; category: string; date: string; description: string | null }> =
     filteredTxRaw;
 
   if (rpcResult.error) {
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       // Fallback path (approx. keyset pagination).
       let q = supabase
         .from("transactions")
-        .select("id, amount, type, category, date")
+        .select("id, amount, type, category, date, description")
         .eq("user_id", user.id)
         .gte("date", range.start.toISOString())
         .lt("date", range.end.toISOString())

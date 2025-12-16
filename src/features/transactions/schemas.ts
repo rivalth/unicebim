@@ -22,6 +22,15 @@ export const createTransactionSchema = z
      * Stored as UTC timestamp in Supabase.
      */
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçerli bir tarih seçin."),
+    /**
+     * Optional description/note for the transaction.
+     * Max length: 500 characters.
+     */
+    description: z
+      .string()
+      .max(500, "Açıklama en fazla 500 karakter olabilir.")
+      .optional()
+      .nullable(),
   })
   .superRefine((val, ctx) => {
     const isIncomeCategory = (INCOME_CATEGORIES as readonly string[]).includes(val.category);
@@ -57,6 +66,15 @@ export const updateTransactionSchema = z
     type: transactionTypeSchema,
     category: transactionCategorySchema,
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Geçerli bir tarih seçin."),
+    /**
+     * Optional description/note for the transaction.
+     * Max length: 500 characters.
+     */
+    description: z
+      .string()
+      .max(500, "Açıklama en fazla 500 karakter olabilir.")
+      .optional()
+      .nullable(),
   })
   .superRefine((val, ctx) => {
     const isIncomeCategory = (INCOME_CATEGORIES as readonly string[]).includes(val.category);

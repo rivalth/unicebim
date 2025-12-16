@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnimatedContainer } from "../animated-container";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import TransactionHistoryPaginated from "@/features/transactions/transaction-history-paginated";
+import { ImportButtonWrapper } from "./import-button-wrapper";
 import { formatTRY } from "@/lib/money";
 import { toFiniteNumber } from "@/lib/number";
 import { mapProfileRow, mapTransactionRow, normalizeTransactionAmount } from "@/lib/supabase/mappers";
@@ -246,8 +247,11 @@ export default async function TransactionsListPage({
           <CardHeader className="pb-2 sm:pb-3">
             <CardTitle className="text-base sm:text-lg">Yeni işlem ekle</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <AddTransactionForm defaultDate={month.ymd} />
+            <div className="pt-2 border-t">
+              <ImportButtonWrapper />
+            </div>
           </CardContent>
         </Card>
       </AnimatedContainer>

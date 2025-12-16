@@ -50,7 +50,7 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("transactions")
-      .select("id, amount, type, category, date")
+      .select("id, amount, type, category, date, description")
       .eq("user_id", user.id)
       .gte("date", monthStart.toISOString())
       .lt("date", monthEnd.toISOString())

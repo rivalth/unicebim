@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import * as React from "react";
 import { useForm } from "react-hook-form";
+import { useSearchParams } from "next/navigation";
 
 import { loginAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { type LoginInput, loginSchema } from "@/features/auth/schemas";
 
 export default function LoginForm() {
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
+
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [showPassword, setShowPassword] = React.useState(false);
@@ -54,7 +58,9 @@ export default function LoginForm() {
 
         // Successful login: use full page reload to ensure auth state is refreshed
         // This prevents issues where router.push doesn't update the session properly
-        window.location.href = result.redirectTo ?? "/dashboard";
+        // Priority: result.redirectTo (e.g., email confirmation) > redirect query param > /dashboard
+        const finalRedirect = result.redirectTo ?? redirectTo ?? "/dashboard";
+        window.location.href = finalRedirect;
       } catch (error) {
         // Handle unexpected errors (network, etc.)
         console.error("Login error:", error);
@@ -62,7 +68,7 @@ export default function LoginForm() {
       }
     });
     },
-    [form],
+    [form, redirectTo],
   );
 
   const handleFormSubmit = React.useCallback(

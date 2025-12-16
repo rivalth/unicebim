@@ -24,6 +24,7 @@ import {
   generateWebApplicationSchema,
   generateFAQPageSchema,
 } from "@/components/seo/structured-data";
+import { getCachedUser } from "@/lib/supabase/server";
 
 const faqItems = [
   {
@@ -58,7 +59,10 @@ const faqItems = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const user = await getCachedUser();
+  const isAuthenticated = !!user;
+
   const organizationSchema = generateOrganizationSchema();
   const webApplicationSchema = generateWebApplicationSchema();
   const faqPageSchema = generateFAQPageSchema(faqItems);
@@ -74,7 +78,7 @@ export default function Home() {
       >
         Ana içeriğe geç
       </a>
-      <PublicHeader />
+      <PublicHeader isAuthenticated={isAuthenticated} />
 
       <main id="main-content" className="flex-1" role="main">
         {/* Hero Section */}

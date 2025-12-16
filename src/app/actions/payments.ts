@@ -60,7 +60,7 @@ export async function createPaymentAction(
   const ip = getClientIp(h);
   const rl = await checkRateLimit({
     key: buildRateLimitKey({ scope: "payments.write", ip, userId: user.id }),
-    policy: rateLimitPolicies["payments.write"] ?? rateLimitPolicies["tx.write"], // Fallback to tx.write if not defined
+    policy: rateLimitPolicies["payments.write"],
     requestId: originCheck.requestId,
     context: { action: "createPaymentAction", userId: user.id },
   });

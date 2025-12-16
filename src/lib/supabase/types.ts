@@ -127,6 +127,7 @@ export interface Database {
           category: string;
           date: string;
           wallet_id: string | null;
+          description: string | null;
         };
         Insert: {
           id?: string;
@@ -136,6 +137,7 @@ export interface Database {
           category: string;
           date?: string;
           wallet_id?: string | null;
+          description?: string | null;
         };
         Update: {
           id?: string;
@@ -145,6 +147,7 @@ export interface Database {
           category?: string;
           date?: string;
           wallet_id?: string | null;
+          description?: string | null;
         };
         Relationships: [
           {

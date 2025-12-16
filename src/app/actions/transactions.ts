@@ -25,6 +25,23 @@ export type TransactionsActionResult =
   | { ok: true }
   | { ok: false; message: string; fieldErrors?: FieldErrors };
 
+export type BulkImportResult = {
+  ok: true;
+  successCount: number;
+  failedCount: number;
+  failedTransactions: Array<{
+    index: number;
+    transaction: {
+      amount: number;
+      type: "income" | "expense";
+      category: string;
+      date: string;
+      description?: string | null;
+    };
+    errors: string[];
+  }>;
+} | { ok: false; message: string };
+
 function invalidInputResult(fieldErrors: FieldErrors): TransactionsActionResult {
   return { ok: false, message: "Lütfen alanları kontrol edin.", fieldErrors };
 }
@@ -76,6 +93,7 @@ export async function createTransactionAction(
     type: parsed.data.type,
     category: parsed.data.category,
     date: date.toISOString(),
+    description: parsed.data.description?.trim() || null,
   });
 
   if (insertError) {
@@ -211,6 +229,7 @@ export async function updateTransactionAction(
       type: parsed.data.type,
       category: parsed.data.category,
       date: date.toISOString(),
+      description: parsed.data.description?.trim() || null,
     })
     .eq("id", parsed.data.id)
     .eq("user_id", user.id)
@@ -297,4 +316,168 @@ export async function deleteTransactionAction(
   return { ok: true };
 }
 
+/**
+ * Bulk import transactions from bank statement import.
+ *
+ * Validates and inserts multiple transactions in a single operation.
+ * Uses batch insert for better performance.
+ * Returns detailed results including which transactions succeeded and which failed.
+ */
+export async function bulkImportTransactionsAction(
+  transactions: Array<{
+    amount: number;
+    type: "income" | "expense";
+    category: string;
+    date: string; // YYYY-MM-DD format
+  }>,
+): Promise<BulkImportResult> {
+  const originCheck = await enforceSameOriginForServerAction("bulkImportTransactionsAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
+  // Validate input array
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    return { ok: false, message: "En az bir işlem gerekli." };
+  }
+
+  if (transactions.length > 1000) {
+    return { ok: false, message: "Bir seferde en fazla 1000 işlem içe aktarılabilir." };
+  }
+
+  const failedTransactions: Array<{
+    index: number;
+    transaction: {
+      amount: number;
+      type: "income" | "expense";
+      category: string;
+      date: string;
+    };
+    errors: string[];
+  }> = [];
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    logger.warn("bulkImportTransactions.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
+  }
+
+  if (!user) {
+    return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
+  }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  // Use a more lenient rate limit for bulk imports (10 bulk imports per hour)
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "tx.write", ip, userId: user.id }),
+    policy: { limit: 10, windowSeconds: 3600 }, // 10 per hour for bulk operations
+    requestId: originCheck.requestId,
+    context: { action: "bulkImportTransactionsAction", userId: user.id, count: transactions.length },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
+
+  // Validate and transform each transaction
+  const validatedTransactions: Array<{
+    user_id: string;
+    amount: number;
+    type: "income" | "expense";
+    category: string;
+    date: string;
+    description: string | null;
+  }> = [];
+
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i]!;
+    const errors: string[] = [];
+
+    // Validate using schema
+    const parsed = createTransactionSchema.safeParse({
+      amount: tx.amount,
+      type: tx.type,
+      category: tx.category,
+      date: tx.date,
+    });
+
+    if (!parsed.success) {
+      const txErrors = parsed.error.flatten().fieldErrors;
+      for (const [, messages] of Object.entries(txErrors)) {
+        errors.push(...(messages ?? []));
+      }
+      failedTransactions.push({
+        index: i,
+        transaction: tx,
+        errors,
+      });
+      continue;
+    }
+
+    const date = new Date(parsed.data.date);
+    if (!Number.isFinite(date.getTime())) {
+      errors.push("Geçerli bir tarih seçin.");
+      failedTransactions.push({
+        index: i,
+        transaction: tx,
+        errors,
+      });
+      continue;
+    }
+
+    validatedTransactions.push({
+      user_id: user.id,
+      amount: parsed.data.amount,
+      type: parsed.data.type,
+      category: parsed.data.category,
+      date: date.toISOString(),
+      description: parsed.data.description?.trim() || null,
+    });
+  }
+
+  // Batch insert (Supabase supports up to 1000 rows per insert)
+  // Split into chunks of 500 for safety
+  const CHUNK_SIZE = 500;
+  const chunks: typeof validatedTransactions[] = [];
+  for (let i = 0; i < validatedTransactions.length; i += CHUNK_SIZE) {
+    chunks.push(validatedTransactions.slice(i, i + CHUNK_SIZE));
+  }
+
+  for (const chunk of chunks) {
+    const { error: insertError } = await supabase.from("transactions").insert(chunk);
+
+    if (insertError) {
+      logger.error("bulkImportTransactions.insert failed", {
+        requestId: originCheck.requestId,
+        code: insertError.code,
+        message: insertError.message,
+        chunkSize: chunk.length,
+      });
+      return {
+        ok: false,
+        message: `İşlemler kaydedilemedi: ${insertError.message}`,
+      };
+    }
+  }
+
+  logger.info("bulkImportTransactions.success", {
+    requestId: originCheck.requestId,
+    userId: user.id,
+    successCount: validatedTransactions.length,
+    failedCount: failedTransactions.length,
+  });
+
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    successCount: validatedTransactions.length,
+    failedCount: failedTransactions.length,
+    failedTransactions,
+  };
+}
 

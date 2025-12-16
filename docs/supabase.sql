@@ -106,6 +106,8 @@ create table if not exists public.transactions (
   -- Micro-wallets: İşlem hangi cüzdandan yapıldı (opsiyonel, null ise default wallet)
   -- Note: Foreign key constraint added in migration section below
   wallet_id uuid,
+  -- Description/Note: Optional user-provided description for the transaction
+  description text,
   -- Database-level category validation: ensures category is one of the allowed values.
   -- This provides defense-in-depth alongside application-level validation (Zod schemas).
   -- Valid categories must match those defined in src/features/transactions/categories.ts
@@ -194,6 +196,11 @@ alter table public.transactions
 -- Add wallet_id column to transactions if it doesn't exist (migration for existing tables)
 alter table public.transactions
   add column if not exists wallet_id uuid;
+
+-- Add description column to transactions if it doesn't exist (migration for existing tables)
+-- Optional text field with max length constraint enforced at application level (500 chars)
+alter table public.transactions
+  add column if not exists description text check (description is null or length(description) <= 500);
 
 -- Add foreign key constraint for wallet_id (only if wallets table exists)
 do $$
@@ -321,6 +328,9 @@ $$;
 grant execute on function public.get_monthly_summary(timestamptz, timestamptz) to authenticated;
 
 -- Transactions pagination RPC (keyset pagination; RLS-safe via auth.uid()).
+-- Drop existing function first to allow return type changes (description field added).
+drop function if exists public.get_transactions_page(timestamptz, timestamptz, integer, timestamptz, uuid);
+
 create or replace function public.get_transactions_page(
   p_start timestamptz,
   p_end timestamptz,
@@ -333,14 +343,15 @@ returns table (
   amount numeric,
   type public.transaction_type,
   category text,
-  date timestamptz
+  date timestamptz,
+  description text
 )
 language sql
 stable
 security invoker
 set search_path = public
 as $$
-  select t.id, t.amount, t.type, t.category, t.date
+  select t.id, t.amount, t.type, t.category, t.date, t.description
   from public.transactions t
   where t.user_id = auth.uid()
     and t.date >= p_start

@@ -27,7 +27,11 @@ export type PaymentWithAnalysis = PaymentData & {
  * Normalize payment amount from database (handles numeric/string conversion)
  */
 function normalizePaymentAmount(amount: unknown): number {
-  return toFiniteNumber(amount);
+  const normalized = toFiniteNumber(amount);
+  if (normalized === null) {
+    throw new Error("Payment amount must be a valid number");
+  }
+  return normalized;
 }
 
 /**
@@ -191,11 +195,12 @@ export async function getUpcomingPaymentsWithAnalysis(
     }));
   }
 
-  if (isMissingRpcFunctionError(rpcResult.error)) {
+  const rpcError = rpcResult.error;
+  if (rpcError && isMissingRpcFunctionError(rpcError)) {
     logger.warn("payment.getUpcomingPaymentsWithAnalysis missing RPC (fallback)", {
       requestId,
-      code: rpcResult.error.code,
-      message: rpcResult.error.message,
+      code: rpcError.code,
+      message: rpcError.message,
     });
 
     // Fallback: query directly and calculate analysis
@@ -241,11 +246,16 @@ export async function getUpcomingPaymentsWithAnalysis(
     });
   }
 
-  logger.error("payment.getUpcomingPaymentsWithAnalysis failed", {
-    requestId,
-    code: rpcResult.error.code,
-    message: rpcResult.error.message,
-  });
+  // Handle other RPC errors
+  if (rpcError) {
+    const errorCode = typeof rpcError === "object" && rpcError !== null && "code" in rpcError ? (rpcError as { code?: string }).code : undefined;
+    const errorMessage = typeof rpcError === "object" && rpcError !== null && "message" in rpcError ? (rpcError as { message?: string }).message : undefined;
+    logger.error("payment.getUpcomingPaymentsWithAnalysis failed", {
+      requestId,
+      code: errorCode ?? "unknown",
+      message: errorMessage ?? "Unknown error",
+    });
+  }
   return [];
 }
 
@@ -268,11 +278,12 @@ export async function getUnpaidPaymentsTotal(requestId: string): Promise<number>
     return normalizePaymentAmount(rpcResult.data);
   }
 
-  if (isMissingRpcFunctionError(rpcResult.error)) {
+  const rpcError = rpcResult.error;
+  if (rpcError && isMissingRpcFunctionError(rpcError)) {
     logger.warn("payment.getUnpaidPaymentsTotal missing RPC (fallback)", {
       requestId,
-      code: rpcResult.error.code,
-      message: rpcResult.error.message,
+      code: rpcError.code,
+      message: rpcError.message,
     });
 
     // Fallback: query directly
@@ -298,11 +309,16 @@ export async function getUnpaidPaymentsTotal(requestId: string): Promise<number>
     return (payments ?? []).reduce((sum, p) => sum + normalizePaymentAmount(p.amount), 0);
   }
 
-  logger.error("payment.getUnpaidPaymentsTotal failed", {
-    requestId,
-    code: rpcResult.error.code,
-    message: rpcResult.error.message,
-  });
+  // Handle other RPC errors
+  if (rpcError) {
+    const errorCode = typeof rpcError === "object" && rpcError !== null && "code" in rpcError ? (rpcError as { code?: string }).code : undefined;
+    const errorMessage = typeof rpcError === "object" && rpcError !== null && "message" in rpcError ? (rpcError as { message?: string }).message : undefined;
+    logger.error("payment.getUnpaidPaymentsTotal failed", {
+      requestId,
+      code: errorCode ?? "unknown",
+      message: errorMessage ?? "Unknown error",
+    });
+  }
   return 0;
 }
 

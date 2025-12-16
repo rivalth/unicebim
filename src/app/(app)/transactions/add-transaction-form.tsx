@@ -78,6 +78,7 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
         type: "expense",
         category: DEFAULT_EXPENSE_CATEGORY,
         date: defaultDate,
+        description: null,
       });
       router.refresh();
       // Call onSuccess callback if provided (e.g., to close modal)
@@ -137,6 +138,23 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
         {form.formState.errors.date?.message ? (
           <p className="text-sm text-destructive" role="alert">
             {form.formState.errors.date.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="description">Açıklama (Opsiyonel)</Label>
+        <textarea
+          id="description"
+          rows={3}
+          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+          placeholder="İşlem hakkında not ekleyin..."
+          maxLength={500}
+          {...form.register("description")}
+        />
+        {form.formState.errors.description?.message ? (
+          <p className="text-sm text-destructive" role="alert">
+            {form.formState.errors.description.message}
           </p>
         ) : null}
       </div>
