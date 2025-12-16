@@ -8,10 +8,10 @@ type HeadersLike = {
 };
 
 /**
- * Get a request correlation id (edge runtime compatible).
+ * Get a request correlation id.
  * 
  * If the incoming request already has `x-request-id`, we reuse it (bounded length).
- * Otherwise we generate a new UUID using Web Crypto API (available in edge runtime).
+ * Otherwise we generate a new UUID using Web Crypto API (available in both Edge and Node.js runtimes).
  */
 function getRequestId(headers: HeadersLike): string {
   const MAX_REQUEST_ID_LENGTH = 128;
@@ -21,13 +21,14 @@ function getRequestId(headers: HeadersLike): string {
 }
 
 /**
- * Refresh Supabase auth session (if needed) during Next.js Middleware execution.
+ * Refresh Supabase auth session (if needed) during Next.js Proxy/Middleware execution.
  *
  * Why:
  * - Keeps server-side auth state in sync
  * - Ensures `cookies()`-based Supabase clients see a valid session
  * 
- * Note: This function is edge runtime compatible (no Node.js-specific imports).
+ * Note: This function is compatible with both Edge Runtime (middleware) and Node.js Runtime (proxy).
+ * Uses only Web APIs that are available in both runtimes.
  */
 export async function updateSupabaseSession(request: NextRequest) {
   const requestId = getRequestId(request.headers);
@@ -45,7 +46,7 @@ export async function updateSupabaseSession(request: NextRequest) {
   });
   response.headers.set("x-request-id", requestId);
 
-  // Use process.env directly in middleware (edge runtime compatible)
+  // Use process.env directly (available in both Edge and Node.js runtimes)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
