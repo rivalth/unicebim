@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "NODE_OPTIONS='--no-warnings=DeprecationWarning:url.parse' next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_OPTIONS='--no-warnings=DeprecationWarning:url.parse' next start",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "prepare": "husky install",
