@@ -5,6 +5,7 @@ import * as React from "react";
 import { Trash2, Pencil, Image as ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import { deleteSubscriptionAction, updateSubscriptionAction } from "@/app/actions/subscriptions";
@@ -156,13 +157,16 @@ export default function SubscriptionsList({ subscriptions, totalMonthly: dbTotal
           >
             <div className="flex items-center gap-3 flex-1">
               {subscription.icon_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={subscription.icon_url}
-                  alt=""
-                  className="size-10 rounded object-contain"
-                  aria-hidden="true"
-                />
+                <div className="relative size-10 rounded overflow-hidden">
+                  <Image
+                    src={subscription.icon_url}
+                    alt=""
+                    fill
+                    className="object-contain"
+                    aria-hidden="true"
+                    unoptimized
+                  />
+                </div>
               ) : (
                 <div className="flex size-10 items-center justify-center rounded bg-muted">
                   <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { AlertTriangle, Calendar } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -372,12 +373,14 @@ export default async function DashboardPage() {
               <div key={sub.id} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   {sub.icon_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={sub.icon_url}
                       alt=""
-                      className="size-6 rounded object-contain"
+                      width={24}
+                      height={24}
+                      className="rounded object-contain"
                       aria-hidden="true"
+                      unoptimized
                     />
                   ) : (
                     <Calendar className="size-4 text-amber-600" aria-hidden="true" />

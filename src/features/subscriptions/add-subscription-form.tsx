@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Image as ImageIcon, ChevronDown } from "lucide-react";
+import Image from "next/image";
+import { Plus, Loader2, ImageIcon, ChevronDown } from "lucide-react";
 
 import { createSubscriptionAction } from "@/app/actions/subscriptions";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export default function AddSubscriptionForm({ onSuccess }: Props) {
   const [isPending, setIsPending] = React.useState(false);
   const [isFetchingIcon, setIsFetchingIcon] = React.useState(false);
   const [iconUrl, setIconUrl] = React.useState<string | null>(null);
+  const [iconError, setIconError] = React.useState(false);
 
   // Calculate default next renewal date (1 month from today for monthly, 1 year for yearly)
   const getDefaultNextRenewalDate = () => {
@@ -77,11 +79,13 @@ export default function AddSubscriptionForm({ onSuccess }: Props) {
       setIconUrl(null);
       form.setValue("icon_url", null);
       setIsFetchingIcon(false);
+      setIconError(false);
       return;
     }
 
     const timeoutId = setTimeout(async () => {
       setIsFetchingIcon(true);
+      setIconError(false);
       try {
         const icon = await getBrandIcon(name);
         if (icon) {
@@ -95,6 +99,7 @@ export default function AddSubscriptionForm({ onSuccess }: Props) {
         // Silently fail - icon fetching is optional
         setIconUrl(null);
         form.setValue("icon_url", null);
+        setIconError(true);
       } finally {
         setIsFetchingIcon(false);
       }
@@ -206,18 +211,22 @@ export default function AddSubscriptionForm({ onSuccess }: Props) {
           {isFetchingIcon && (
             <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
           )}
-          {iconUrl && !isFetchingIcon && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={iconUrl}
-              alt=""
-              className="size-10 rounded object-contain border border-border"
-              aria-hidden="true"
-              onError={() => {
-                setIconUrl(null);
-                form.setValue("icon_url", null);
-              }}
-            />
+          {iconUrl && !isFetchingIcon && !iconError && (
+            <div className="relative size-10 rounded border border-border overflow-hidden">
+              <Image
+                src={iconUrl}
+                alt=""
+                fill
+                className="object-contain"
+                aria-hidden="true"
+                onError={() => {
+                  setIconError(true);
+                  setIconUrl(null);
+                  form.setValue("icon_url", null);
+                }}
+                unoptimized
+              />
+            </div>
           )}
           {!iconUrl && !isFetchingIcon && name && name.trim().length > 0 && (
             <div className="flex size-10 items-center justify-center rounded bg-muted border border-border">
