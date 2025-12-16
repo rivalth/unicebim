@@ -5,11 +5,12 @@
  */
 
 /**
- * Turkish IBAN format: TR + 2 check digits + 4 bank code + 5 zeros + 16 account number
+ * Turkish IBAN format: TR + 2 check digits + 4 bank code + 18 account number
  * Total: 26 characters
  * Example: TR330006100519786457841326
+ * Structure: TR (2) + check digits (2) + bank code (4) + account number (18) = 26
  */
-const IBAN_PATTERN = /TR\d{2}\s?\d{4}\s?\d{5}\s?\d{16}/gi;
+const IBAN_PATTERN = /TR\d{2}\s?\d{4}\s?\d{18}/gi;
 
 /**
  * Format IBAN for display (add spaces every 4 characters).
@@ -38,6 +39,26 @@ export function extractIBAN(text: string | null | undefined): string | null {
   }
 
   return null;
+}
+
+/**
+ * Validate Turkish IBAN format.
+ * 
+ * Turkish IBAN format: TR + 2 check digits + 4 bank code + 18 account number = 26 characters
+ * Example: TR330006100519786457841326
+ * Structure: TR (2) + check digits (2) + bank code (4) + account number (18) = 26
+ * 
+ * @param iban - IBAN string to validate (may contain spaces)
+ * @returns true if IBAN matches Turkish format, false otherwise
+ */
+export function validateIBAN(iban: string | null | undefined): boolean {
+  if (!iban || typeof iban !== "string") {
+    return false;
+  }
+
+  const cleaned = iban.replace(/\s/g, "").toUpperCase();
+  // TR + 2 check digits + 4 bank code + 18 account number = 26 characters
+  return /^TR\d{2}\d{4}\d{18}$/.test(cleaned) && cleaned.length === 26;
 }
 
 /**
