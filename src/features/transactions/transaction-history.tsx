@@ -47,6 +47,8 @@ export type TransactionRow = {
   type: "income" | "expense";
   category: string;
   date: string; // ISO
+  wallet_id?: string | null;
+  wallet_name?: string | null;
 };
 
 function isKnownCategory(category: string): category is TransactionCategory {
@@ -166,6 +168,7 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
                   <div className="text-xs text-muted-foreground">
                     {new Date(t.date).toLocaleDateString("tr-TR")} •{" "}
                     {t.type === "income" ? "Gelir" : "Gider"}
+                    {t.wallet_name && ` • ${t.wallet_name}`}
                   </div>
                 </div>
               </div>

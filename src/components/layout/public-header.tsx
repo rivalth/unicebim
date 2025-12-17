@@ -34,6 +34,9 @@ export function PublicHeader({ isAuthenticated = false }: PublicHeaderProps) {
         {/* Desktop Navigation */}
         <div className="hidden items-center gap-2 md:flex">
           <Button asChild variant="ghost" size="sm">
+            <Link href="/tools/bill-splitter">Hesap Bölüştürücü</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
             <Link href="/#features">Özellikler</Link>
           </Button>
           <Button asChild variant="ghost" size="sm">
@@ -83,6 +86,15 @@ export function PublicHeader({ isAuthenticated = false }: PublicHeaderProps) {
           aria-label="Mobil menü"
         >
           <div className="mx-auto w-full max-w-5xl px-6 py-4 space-y-2">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Link href="/tools/bill-splitter">Hesap Bölüştürücü</Link>
+            </Button>
             <Button
               asChild
               variant="ghost"

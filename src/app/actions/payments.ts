@@ -263,44 +263,6 @@ export async function markPaymentPaidAction(
   });
   if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
-  // Get payment details before updating
-  const { data: payment, error: fetchError } = await supabase
-    .from("upcoming_payments")
-    .select("name, amount, due_date, is_paid")
-    .eq("id", parsed.data.id)
-    .eq("user_id", user.id)
-    .single();
-
-  if (fetchError || !payment) {
-    logger.error("Payments.markPaymentPaid.fetch failed", {
-      requestId: originCheck.requestId,
-      code: fetchError?.code,
-      message: fetchError?.message,
-    });
-    return { ok: false, message: "Ödeme bulunamadı." };
-  }
-
-  // If marking as paid and it wasn't paid before, create a transaction
-  if (parsed.data.is_paid && !payment.is_paid) {
-    // Create transaction for this payment
-    const { error: txError } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      amount: payment.amount,
-      type: "expense",
-      category: "Sabitler", // Fixed expenses category
-      date: payment.due_date, // Use due date as transaction date
-    });
-
-    if (txError) {
-      logger.error("Payments.markPaymentPaid.createTransaction failed", {
-        requestId: originCheck.requestId,
-        code: txError.code,
-        message: txError.message,
-      });
-      // Continue anyway - payment status will be updated
-    }
-  }
-
   // Update payment status
   const { error } = await supabase
     .from("upcoming_payments")

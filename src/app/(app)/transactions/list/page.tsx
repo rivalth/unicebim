@@ -94,7 +94,7 @@ export default async function TransactionsListPage({
 
   const supabase = await createSupabaseServerClient();
 
-  const [profileResult, fixedExpensesResult, transactionsResult, summaryResult] = await Promise.all([
+  const [profileResult, fixedExpensesResult, transactionsResult, summaryResult, walletsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name, monthly_budget_goal, monthly_fixed_expenses, meal_price, next_income_date, avatar_url")
@@ -107,7 +107,7 @@ export default async function TransactionsListPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("transactions")
-      .select("id, amount, type, category, date")
+      .select("id, amount, type, category, date, wallet_id, wallets(id, name)")
       .eq("user_id", user.id)
       .gte("date", month.start.toISOString())
       .lt("date", month.end.toISOString())
@@ -118,17 +118,39 @@ export default async function TransactionsListPage({
       p_start: month.start.toISOString(),
       p_end: month.end.toISOString(),
     }),
+    supabase
+      .from("wallets")
+      .select("id, name, is_default")
+      .eq("user_id", user.id)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: true }),
   ]);
 
   const { data: profile } = profileResult;
   const { data: fixedExpensesRaw } = fixedExpensesResult;
   const { data: txRaw } = transactionsResult;
   const { data: summaryRows, error: summaryError } = summaryResult;
+  const { data: walletsRaw } = walletsResult;
+
+  const wallets = (walletsRaw ?? []).map((w) => ({
+    id: w.id,
+    name: w.name,
+    is_default: w.is_default,
+  }));
+  const defaultWallet = wallets.find((w) => w.is_default) || wallets[0] || null;
 
   const normalizedProfile = mapProfileRow(profile);
   const monthlyBudgetGoal = normalizedProfile?.monthly_budget_goal ?? null;
 
-  const transactionsAll = (txRaw ?? []).map(mapTransactionRow);
+  const transactionsAll = (txRaw ?? []).map((t) => {
+    const mapped = mapTransactionRow(t);
+    const wallet = (t as unknown as { wallets?: { id: string; name: string } | null }).wallets;
+    return {
+      ...mapped,
+      wallet_id: t.wallet_id || null,
+      wallet_name: wallet?.name || null,
+    };
+  });
   const hasMore = transactionsAll.length > PAGE_SIZE;
   const transactions = hasMore ? transactionsAll.slice(0, PAGE_SIZE) : transactionsAll;
   const nextCursor =
@@ -248,7 +270,7 @@ export default async function TransactionsListPage({
             <CardTitle className="text-base sm:text-lg">Yeni işlem ekle</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <AddTransactionForm defaultDate={month.ymd} />
+            <AddTransactionForm defaultDate={month.ymd} wallets={wallets} defaultWalletId={defaultWallet?.id || null} />
             <div className="pt-2 border-t">
               <ImportButtonWrapper />
             </div>

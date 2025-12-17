@@ -10,11 +10,10 @@ import { MealIndex } from "@/features/dashboard/meal-index";
 import { IncomeCountdown } from "@/features/dashboard/income-countdown";
 import { SocialScore } from "@/features/dashboard/social-score";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
-import AddWalletForm from "@/features/wallets/add-wallet-form";
+import WalletsCarousel from "@/features/wallets/wallets-carousel";
 import QuickAddTransactionDialog from "@/features/transactions/quick-add-transaction-dialog";
 import TransactionHistory from "@/features/transactions/transaction-history";
-import AddPaymentForm from "@/features/payments/add-payment-form";
-import PaymentsList from "@/features/payments/payments-list";
+import PaymentsCard from "@/features/payments/payments-card";
 import { getUpcomingPaymentsWithAnalysis } from "@/services/payment.service";
 import { getUpcomingSubscriptionRenewals } from "@/services/subscription.service";
 import type { PaymentAnalysisInput } from "@/features/payments/payment-analysis";
@@ -54,7 +53,7 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("transactions")
-      .select("id, amount, type, category, date, description")
+      .select("id, amount, type, category, date, description, wallet_id, wallets(id, name)")
       .eq("user_id", user.id)
       .gte("date", monthStart.toISOString())
       .lt("date", monthEnd.toISOString())
@@ -154,6 +153,25 @@ export default async function DashboardPage() {
   const mealPrice = normalizedProfile?.meal_price ?? null;
   const nextIncomeDate = normalizedProfile?.next_income_date ?? null;
 
+  // Map wallets data (handle numeric balance) - needed for QuickAddTransactionDialog
+  const wallets: Array<{ id: string; name: string; balance: number; is_default: boolean }> =
+    walletsRaw && Array.isArray(walletsRaw)
+      ? walletsRaw.map((w: { id: string; name: string; balance: unknown; is_default: boolean }) => ({
+          id: w.id,
+          name: w.name,
+          balance: typeof w.balance === "number" ? w.balance : Number(w.balance) || 0,
+          is_default: w.is_default,
+        }))
+      : [];
+
+  // Get default wallet for QuickAddTransactionDialog
+  const defaultWallet = wallets.find((w) => w.is_default) || wallets[0] || null;
+  const walletOptions = wallets.map((w) => ({
+    id: w.id,
+    name: w.name,
+    is_default: w.is_default,
+  }));
+
   // Onboarding: Show budget setup if monthly budget goal is not set or is zero.
   // Note: `0` is invalid per schema (requires positive), so treat it as unset and show onboarding.
   const needsOnboarding = monthlyBudgetGoal == null || monthlyBudgetGoal === 0;
@@ -198,7 +216,7 @@ export default async function DashboardPage() {
             <CardTitle>Hızlı işlemler</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <QuickAddTransactionDialog />
+            <QuickAddTransactionDialog wallets={walletOptions} defaultWalletId={defaultWallet?.id || null} />
             <p className="text-sm text-muted-foreground">
               Bütçe ayarlarını yaptıktan sonra gelir ve giderlerini ekleyebilirsin.
             </p>
@@ -208,7 +226,15 @@ export default async function DashboardPage() {
     );
   }
 
-  const transactions = (txRaw ?? []).map(mapTransactionRow);
+  const transactions = (txRaw ?? []).map((t) => {
+    const mapped = mapTransactionRow(t);
+    const wallet = (t as unknown as { wallets?: { id: string; name: string } | null }).wallets;
+    return {
+      ...mapped,
+      wallet_id: t.wallet_id || null,
+      wallet_name: wallet?.name || null,
+    };
+  });
 
   const summaryFromDb = summaryRows?.[0];
 
@@ -343,19 +369,12 @@ export default async function DashboardPage() {
     }
   }
 
-  // Map wallets data (handle numeric balance)
-  const wallets: Array<{ id: string; name: string; balance: number; is_default: boolean }> =
-    walletsRaw && Array.isArray(walletsRaw)
-      ? walletsRaw.map((w: { id: string; name: string; balance: unknown; is_default: boolean }) => ({
-          id: w.id,
-          name: w.name,
-          balance: typeof w.balance === "number" ? w.balance : Number(w.balance) || 0,
-          is_default: w.is_default,
-        }))
-      : [];
 
   return (
     <AnimatedContainer className="space-y-4 sm:space-y-6">
+      {/* Wallets Carousel */}
+      <WalletsCarousel wallets={wallets} />
+
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">
           Merhaba{displayName ? `, ${displayName}` : ""}.
@@ -566,7 +585,7 @@ export default async function DashboardPage() {
             <CardTitle className="text-base sm:text-lg">Hızlı işlemler</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 sm:space-y-3">
-            <QuickAddTransactionDialog />
+            <QuickAddTransactionDialog wallets={walletOptions} defaultWalletId={defaultWallet?.id || null} />
             <p className="text-xs sm:text-sm text-muted-foreground">
               Tek ekranda: Tutar → Kategori → Kaydet.
             </p>
@@ -612,75 +631,18 @@ export default async function DashboardPage() {
           {transactions.length === 0 && (
             <div className="flex flex-col items-center gap-4 py-8 text-center">
               <p className="text-sm text-muted-foreground">Henüz işlem yok.</p>
-              <QuickAddTransactionDialog />
+              <QuickAddTransactionDialog wallets={walletOptions} defaultWalletId={defaultWallet?.id || null} />
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2 sm:pb-3">
-          <CardTitle className="text-base sm:text-lg">Gelecek Ödemelerim</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="border-b pb-4">
-            <AddPaymentForm />
-          </div>
-          <PaymentsList payments={payments} analysisInput={paymentAnalysisInput} />
-          {unpaidPaymentsTotal > 0 && (
-            <div className="border-t pt-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-foreground">Toplam Ödenmemiş</span>
-                <span className="font-semibold text-foreground">{formatTRY(unpaidPaymentsTotal)}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Bu tutar bütçenizden düşülmüştür.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2 sm:pb-3">
-          <CardTitle className="text-base sm:text-lg">Cüzdanlarım</CardTitle>
-          <Link className="text-xs sm:text-sm underline underline-offset-4" href="/transactions/list">
-            Detaylar →
-          </Link>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="border-b pb-4">
-            <AddWalletForm />
-          </div>
-          {wallets.length > 0 ? (
-            <div className="space-y-2">
-              {wallets.slice(0, 3).map((wallet) => (
-                <div key={wallet.id} className="flex items-center justify-between border-b pb-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    {wallet.is_default && (
-                      <span className="text-xs text-muted-foreground">(Varsayılan)</span>
-                    )}
-                    <span className="font-medium">{wallet.name}</span>
-                  </div>
-                  <span className="font-semibold">{formatTRY(wallet.balance)}</span>
-                </div>
-              ))}
-              {wallets.length > 3 && (
-                <p className="text-xs text-muted-foreground">
-                  +{wallets.length - 3} cüzdan daha...
-                </p>
-              )}
-              <div className="pt-2">
-                <p className="text-sm font-semibold">
-                  Toplam: {formatTRY(wallets.reduce((sum, w) => sum + w.balance, 0))}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Henüz cüzdan eklenmemiş.</p>
-          )}
-        </CardContent>
-      </Card>
+      <PaymentsCard
+        payments={payments}
+        analysisInput={paymentAnalysisInput}
+        unpaidPaymentsTotal={unpaidPaymentsTotal}
+        wallets={wallets}
+      />
     </AnimatedContainer>
   );
 }

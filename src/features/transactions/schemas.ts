@@ -31,6 +31,10 @@ export const createTransactionSchema = z
       .max(500, "Açıklama en fazla 500 karakter olabilir.")
       .optional()
       .nullable(),
+    /**
+     * Optional wallet ID for the transaction.
+     */
+    wallet_id: z.string().uuid("Geçerli bir cüzdan seçin.").optional().nullable(),
   })
   .superRefine((val, ctx) => {
     const isIncomeCategory = (INCOME_CATEGORIES as readonly string[]).includes(val.category);
@@ -75,6 +79,10 @@ export const updateTransactionSchema = z
       .max(500, "Açıklama en fazla 500 karakter olabilir.")
       .optional()
       .nullable(),
+    /**
+     * Optional wallet ID for the transaction.
+     */
+    wallet_id: z.string().uuid("Geçerli bir cüzdan seçin.").optional().nullable(),
   })
   .superRefine((val, ctx) => {
     const isIncomeCategory = (INCOME_CATEGORIES as readonly string[]).includes(val.category);

@@ -17,22 +17,40 @@ import {
   type CreateTransactionFormInput,
 } from "@/features/transactions/schemas";
 import { detectSubscriptionService, getBrandIcon } from "@/lib/brand-icon";
+import { Wallet } from "lucide-react";
+
+type WalletOption = {
+  id: string;
+  name: string;
+  is_default: boolean;
+};
 
 type Props = {
   defaultDate: string; // YYYY-MM-DD
+  wallets?: WalletOption[]; // Available wallets
+  defaultWalletId?: string | null; // Optional default wallet ID
   onSuccess?: () => void; // Optional callback when transaction is successfully created
 };
 
 const DEFAULT_EXPENSE_CATEGORY: TransactionCategory = "Beslenme";
 const DEFAULT_INCOME_CATEGORY: TransactionCategory = "KYK/Burs";
 
-export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
+export default function AddTransactionForm({ defaultDate, wallets = [], defaultWalletId, onSuccess }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [showSubscriptionPrompt, setShowSubscriptionPrompt] = React.useState(false);
   const [detectedService, setDetectedService] = React.useState<string | null>(null);
   const [isCreatingSubscription, setIsCreatingSubscription] = React.useState(false);
+
+  // Determine default wallet: use provided defaultWalletId, or find default wallet, or first wallet
+  const getDefaultWalletId = () => {
+    if (defaultWalletId) return defaultWalletId;
+    const defaultWallet = wallets.find((w) => w.is_default);
+    if (defaultWallet) return defaultWallet.id;
+    if (wallets.length > 0) return wallets[0]!.id;
+    return null;
+  };
 
   const form = useForm<CreateTransactionFormInput>({
     resolver: zodResolver(createTransactionSchema),
@@ -41,6 +59,7 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
       type: "expense",
       category: DEFAULT_EXPENSE_CATEGORY,
       date: defaultDate,
+      wallet_id: getDefaultWalletId(),
     },
   });
 
@@ -143,6 +162,7 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
         category: DEFAULT_EXPENSE_CATEGORY,
         date: defaultDate,
         description: null,
+        wallet_id: getDefaultWalletId(),
       });
       setShowSubscriptionPrompt(false);
       setDetectedService(null);
@@ -197,6 +217,35 @@ export default function AddTransactionForm({ defaultDate, onSuccess }: Props) {
           </p>
         ) : null}
       </div>
+
+      {wallets.length > 0 && (
+        <div className="grid gap-2">
+          <Label htmlFor="wallet_id">Cüzdan</Label>
+          <div className="relative">
+            <Wallet className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <select
+              id="wallet_id"
+              className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm"
+              {...form.register("wallet_id")}
+            >
+              <option value="">Cüzdan seçin (Opsiyonel)</option>
+              {wallets.map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>
+                  {wallet.name} {wallet.is_default && "(Varsayılan)"}
+                </option>
+              ))}
+            </select>
+          </div>
+          {form.formState.errors.wallet_id?.message ? (
+            <p className="text-sm text-destructive" role="alert">
+              {form.formState.errors.wallet_id.message}
+            </p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Bu işlem hangi cüzdandan yapılacak? Örn: Nakit cüzdanından 100 TL&apos;lik sosyal harcaması
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-2">
         <Label htmlFor="date">Tarih</Label>

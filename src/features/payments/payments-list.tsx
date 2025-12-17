@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Trash2, Pencil, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 // Simple date formatting function (no external dependency)
@@ -20,6 +20,7 @@ import {
   updatePaymentAction,
   markPaymentPaidAction,
 } from "@/app/actions/payments";
+import { createTransactionAction } from "@/app/actions/transactions";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -32,6 +33,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatTRY } from "@/lib/money";
@@ -43,15 +51,218 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { PaymentWithAnalysis } from "@/services/payment.service";
 import { analyzePaymentFeasibility, type PaymentAnalysisInput } from "@/features/payments/payment-analysis";
+import { createTransactionSchema, type CreateTransactionFormInput } from "@/features/transactions/schemas";
+import TransactionCategoryPicker from "@/features/transactions/category-picker";
+import { EXPENSE_CATEGORIES, type TransactionCategory } from "@/features/transactions/categories";
+import { Wallet } from "lucide-react";
+import { toLocalYmd } from "@/lib/date";
 
 type Payment = PaymentWithAnalysis;
+
+type WalletOption = {
+  id: string;
+  name: string;
+  is_default: boolean;
+};
 
 type Props = {
   payments: Payment[];
   analysisInput?: PaymentAnalysisInput;
+  wallets?: WalletOption[];
 };
 
-export default function PaymentsList({ payments, analysisInput }: Props) {
+const DEFAULT_EXPENSE_CATEGORY: TransactionCategory = "Sabitler";
+
+type PaymentTransactionFormProps = {
+  payment: Payment;
+  wallets: WalletOption[];
+  onSuccess: () => void;
+};
+
+function PaymentTransactionForm({ payment, wallets, onSuccess }: PaymentTransactionFormProps) {
+  const router = useRouter();
+  const [serverError, setServerError] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
+
+  // Determine default wallet: find default wallet, or first wallet
+  const getDefaultWalletId = () => {
+    const defaultWallet = wallets.find((w) => w.is_default);
+    if (defaultWallet) return defaultWallet.id;
+    if (wallets.length > 0) return wallets[0]!.id;
+    return null;
+  };
+
+  const paymentDate = toLocalYmd(new Date(payment.due_date));
+
+  const form = useForm<CreateTransactionFormInput>({
+    resolver: zodResolver(createTransactionSchema),
+    defaultValues: {
+      amount: String(payment.amount),
+      type: "expense",
+      category: DEFAULT_EXPENSE_CATEGORY,
+      date: paymentDate,
+      description: payment.name,
+      wallet_id: getDefaultWalletId(),
+    },
+  });
+
+  const type = useWatch({ control: form.control, name: "type" });
+  const selectedCategory = useWatch({ control: form.control, name: "category" });
+
+  React.useEffect(() => {
+    const current = form.getValues("category");
+    if (type === "expense") {
+      const isValid = (EXPENSE_CATEGORIES as readonly string[]).includes(current);
+      if (!isValid) {
+        form.setValue("category", DEFAULT_EXPENSE_CATEGORY, { shouldValidate: true });
+      }
+    }
+  }, [form, type]);
+
+  const onSubmit = (values: CreateTransactionFormInput) => {
+    setServerError(null);
+
+    startTransition(async () => {
+      const result = await createTransactionAction(values);
+
+      if (!result.ok) {
+        setServerError(result.message);
+        const fieldErrors = result.fieldErrors ?? {};
+        for (const [field, messages] of Object.entries(fieldErrors)) {
+          if (!messages?.length) continue;
+          form.setError(field as keyof CreateTransactionFormInput, { message: messages[0] });
+        }
+        return;
+      }
+
+      form.reset();
+      router.refresh();
+      onSuccess();
+    });
+  };
+
+  return (
+    <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+      <div className="grid gap-2">
+        <Label htmlFor="amount">Tutar</Label>
+        <Input
+          id="amount"
+          inputMode="decimal"
+          placeholder="Örn: 120"
+          disabled
+          className="opacity-60 pointer-events-none"
+          {...form.register("amount")}
+        />
+        {form.formState.errors.amount?.message ? (
+          <p className="text-sm text-destructive" role="alert">
+            {form.formState.errors.amount.message}
+          </p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Bu değer ödeme bilgisinden otomatik olarak alınmıştır.
+        </p>
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="category">Kategori</Label>
+        <input id="category" type="hidden" {...form.register("category")} />
+        <TransactionCategoryPicker
+          type="expense"
+          value={(selectedCategory as TransactionCategory) ?? DEFAULT_EXPENSE_CATEGORY}
+          onChange={(category) =>
+            form.setValue("category", category as TransactionCategory, { shouldValidate: true })
+          }
+        />
+        {form.formState.errors.category?.message ? (
+          <p className="text-sm text-destructive" role="alert">
+            {form.formState.errors.category.message}
+          </p>
+        ) : null}
+      </div>
+
+      {wallets.length > 0 && (
+        <div className="grid gap-2">
+          <Label htmlFor="wallet_id">Cüzdan</Label>
+          <div className="relative">
+            <Wallet className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <select
+              id="wallet_id"
+              className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm"
+              {...form.register("wallet_id")}
+            >
+              <option value="">Cüzdan seçin (Opsiyonel)</option>
+              {wallets.map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>
+                  {wallet.name} {wallet.is_default && "(Varsayılan)"}
+                </option>
+              ))}
+            </select>
+          </div>
+          {form.formState.errors.wallet_id?.message ? (
+            <p className="text-sm text-destructive" role="alert">
+              {form.formState.errors.wallet_id.message}
+            </p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Bu işlem hangi cüzdandan yapılacak?
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-2">
+        <Label htmlFor="date">Tarih</Label>
+        <Input
+          id="date"
+          type="date"
+          disabled
+          className="opacity-60 pointer-events-none"
+          {...form.register("date")}
+        />
+        {form.formState.errors.date?.message ? (
+          <p className="text-sm text-destructive" role="alert">
+            {form.formState.errors.date.message}
+          </p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Bu değer ödeme vade tarihinden otomatik olarak alınmıştır.
+        </p>
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="description">Açıklama</Label>
+        <textarea
+          id="description"
+          rows={3}
+          disabled
+          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 resize-none pointer-events-none"
+          placeholder="İşlem hakkında not ekleyin..."
+          maxLength={500}
+          {...form.register("description")}
+        />
+        {form.formState.errors.description?.message ? (
+          <p className="text-sm text-destructive" role="alert">
+            {form.formState.errors.description.message}
+          </p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Bu değer ödeme adından otomatik olarak alınmıştır.
+        </p>
+      </div>
+
+      {serverError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {serverError}
+        </p>
+      ) : null}
+
+      <Button type="submit" disabled={isPending}>
+        {isPending ? "Kaydediliyor..." : "Kaydet ve Ödendi Olarak İşaretle"}
+      </Button>
+    </form>
+  );
+}
+
+export default function PaymentsList({ payments, analysisInput, wallets = [] }: Props) {
   const router = useRouter();
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -59,6 +270,20 @@ export default function PaymentsList({ payments, analysisInput }: Props) {
   const [isEditOpen, setEditOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [paymentToMarkPaid, setPaymentToMarkPaid] = React.useState<Payment | null>(null);
+  const [isMarkPaidSheetOpen, setIsMarkPaidSheetOpen] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  // Detect mobile vs desktop
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const form = useForm<UpdatePaymentFormInput>({
     resolver: zodResolver(updatePaymentSchema),
@@ -123,10 +348,36 @@ export default function PaymentsList({ payments, analysisInput }: Props) {
     }
   };
 
+  const handleMarkPaidClick = (payment: Payment) => {
+    if (payment.is_paid) {
+      // If already paid, just toggle it off
+      handleMarkPaid(payment.id, false);
+    } else {
+      // If not paid, open the sheet to create transaction
+      setPaymentToMarkPaid(payment);
+      setIsMarkPaidSheetOpen(true);
+    }
+  };
+
   const handleMarkPaid = async (paymentId: string, isPaid: boolean) => {
     const result = await markPaymentPaidAction({ id: paymentId, is_paid: isPaid });
     if (result.ok) {
       toast.success(isPaid ? "Ödeme ödendi olarak işaretlendi." : "Ödeme ödenmedi olarak işaretlendi.");
+      router.refresh();
+    } else {
+      toast.error(result.message);
+    }
+  };
+
+  const handleTransactionFormSuccess = async () => {
+    if (!paymentToMarkPaid) return;
+
+    // Mark payment as paid after transaction is created
+    const result = await markPaymentPaidAction({ id: paymentToMarkPaid.id, is_paid: true });
+    if (result.ok) {
+      toast.success("Gider kaydı oluşturuldu ve ödeme ödendi olarak işaretlendi.");
+      setIsMarkPaidSheetOpen(false);
+      setPaymentToMarkPaid(null);
       router.refresh();
     } else {
       toast.error(result.message);
@@ -248,7 +499,7 @@ export default function PaymentsList({ payments, analysisInput }: Props) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={() => handleMarkPaid(payment.id, !payment.is_paid)}
+                  onClick={() => handleMarkPaidClick(payment)}
                   aria-label={payment.is_paid ? "Ödenmedi olarak işaretle" : "Ödendi olarak işaretle"}
                 >
                   {payment.is_paid ? (
@@ -362,6 +613,54 @@ export default function PaymentsList({ payments, analysisInput }: Props) {
               {isSaving ? "Kaydediliyor..." : "Kaydet"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sheet for mobile - marking payment as paid and creating transaction */}
+      <Sheet open={isMarkPaidSheetOpen && isMobile} onOpenChange={setIsMarkPaidSheetOpen}>
+        <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Gider Kaydı Oluştur</SheetTitle>
+            <SheetDescription>
+              {paymentToMarkPaid && (
+                <>
+                  <strong>{paymentToMarkPaid.name}</strong> ödemesi için gider kaydı oluşturun. 
+                  Kayıt oluşturulduğunda ödeme otomatik olarak ödendi olarak işaretlenecektir.
+                </>
+              )}
+            </SheetDescription>
+          </SheetHeader>
+          {paymentToMarkPaid && (
+            <PaymentTransactionForm
+              payment={paymentToMarkPaid}
+              wallets={wallets}
+              onSuccess={handleTransactionFormSuccess}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Dialog for desktop - marking payment as paid and creating transaction */}
+      <Dialog open={isMarkPaidSheetOpen && !isMobile} onOpenChange={setIsMarkPaidSheetOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Gider Kaydı Oluştur</DialogTitle>
+            <DialogDescription>
+              {paymentToMarkPaid && (
+                <>
+                  <strong>{paymentToMarkPaid.name}</strong> ödemesi için gider kaydı oluşturun. 
+                  Kayıt oluşturulduğunda ödeme otomatik olarak ödendi olarak işaretlenecektir.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {paymentToMarkPaid && (
+            <PaymentTransactionForm
+              payment={paymentToMarkPaid}
+              wallets={wallets}
+              onSuccess={handleTransactionFormSuccess}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>

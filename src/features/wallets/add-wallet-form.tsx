@@ -12,7 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type CreateWalletFormInput, createWalletSchema } from "@/features/wallets/schemas";
 
-export default function AddWalletForm() {
+type Props = {
+  onSuccess?: () => void;
+};
+
+export default function AddWalletForm({ onSuccess }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -48,6 +52,7 @@ export default function AddWalletForm() {
         isDefault: false,
       });
       router.refresh();
+      onSuccess?.();
     });
   };
 

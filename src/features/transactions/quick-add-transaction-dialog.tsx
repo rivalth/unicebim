@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { Plus } from "lucide-react";
+import { Plus, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { createTransactionAction } from "@/app/actions/transactions";
@@ -30,11 +30,31 @@ import { createTransactionSchema, type CreateTransactionFormInput } from "@/feat
 const DEFAULT_EXPENSE_CATEGORY: TransactionCategory = "Beslenme";
 const DEFAULT_INCOME_CATEGORY: TransactionCategory = "KYK/Burs";
 
-export default function QuickAddTransactionDialog() {
+type WalletOption = {
+  id: string;
+  name: string;
+  is_default: boolean;
+};
+
+type Props = {
+  wallets?: WalletOption[];
+  defaultWalletId?: string | null;
+};
+
+export default function QuickAddTransactionDialog({ wallets = [], defaultWalletId }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+
+  // Determine default wallet: use provided defaultWalletId, or find default wallet, or first wallet
+  const getDefaultWalletId = () => {
+    if (defaultWalletId) return defaultWalletId;
+    const defaultWallet = wallets.find((w) => w.is_default);
+    if (defaultWallet) return defaultWallet.id;
+    if (wallets.length > 0) return wallets[0]!.id;
+    return null;
+  };
 
   const form = useForm<CreateTransactionFormInput>({
     resolver: zodResolver(createTransactionSchema),
@@ -44,6 +64,7 @@ export default function QuickAddTransactionDialog() {
       category: DEFAULT_EXPENSE_CATEGORY,
       date: toLocalYmd(),
       description: "",
+      wallet_id: getDefaultWalletId(),
     },
   });
 
@@ -88,6 +109,7 @@ export default function QuickAddTransactionDialog() {
         category: DEFAULT_EXPENSE_CATEGORY,
         date: toLocalYmd(),
         description: "",
+        wallet_id: getDefaultWalletId(),
       });
       router.refresh();
     });
@@ -169,6 +191,35 @@ export default function QuickAddTransactionDialog() {
               </p>
             ) : null}
           </div>
+
+          {wallets.length > 0 && (
+            <div className="grid gap-2">
+              <Label htmlFor="wallet_id">Cüzdan</Label>
+              <div className="relative">
+                <Wallet className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <select
+                  id="wallet_id"
+                  className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 text-sm"
+                  {...form.register("wallet_id")}
+                >
+                  <option value="">Cüzdan seçin (Opsiyonel)</option>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>
+                      {wallet.name} {wallet.is_default && "(Varsayılan)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {form.formState.errors.wallet_id?.message ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {form.formState.errors.wallet_id.message}
+                </p>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Bu işlem hangi cüzdandan yapılacak?
+              </p>
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="description">Açıklama (Opsiyonel)</Label>

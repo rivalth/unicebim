@@ -2,11 +2,9 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
-import type { Database } from "@/lib/supabase/types";
 
-export type Wallet = {
+export type WalletData = {
   id: string;
-  user_id: string;
   name: string;
   balance: number;
   is_default: boolean;
@@ -14,47 +12,47 @@ export type Wallet = {
 };
 
 /**
- * Get all wallets for the current authenticated user.
+ * Get all wallets for the current user.
  */
-export async function getWallets(requestId: string): Promise<Wallet[] | null> {
+export async function getWallets(requestId?: string): Promise<WalletData[]> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return null;
+    return [];
   }
 
   const { data, error } = await supabase
     .from("wallets")
-    .select("id, user_id, name, balance, is_default, created_at")
+    .select("id, name, balance, is_default, created_at")
     .eq("user_id", user.id)
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: true });
 
   if (error) {
-    logger.error("getWallets failed", {
+    logger.error("wallet.getWallets failed", {
       requestId,
       code: error.code,
       message: error.message,
     });
-    return null;
+    return [];
   }
 
-  if (!data) return [];
-
-  // Map numeric balance from Postgres
-  return data.map((w) => ({
-    ...w,
-    balance: typeof w.balance === "number" ? w.balance : Number(w.balance) || 0,
+  return (data ?? []).map((w) => ({
+    id: w.id,
+    name: w.name,
+    balance: typeof w.balance === "number" ? w.balance : Number(w.balance),
+    is_default: w.is_default,
+    created_at: w.created_at,
   }));
 }
 
 /**
- * Get a single wallet by ID (for the current user).
+ * Get default wallet for the current user.
  */
-export async function getWallet(walletId: string, requestId: string): Promise<Wallet | null> {
+export async function getDefaultWallet(requestId?: string): Promise<WalletData | null> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -66,13 +64,13 @@ export async function getWallet(walletId: string, requestId: string): Promise<Wa
 
   const { data, error } = await supabase
     .from("wallets")
-    .select("id, user_id, name, balance, is_default, created_at")
-    .eq("id", walletId)
+    .select("id, name, balance, is_default, created_at")
     .eq("user_id", user.id)
+    .eq("is_default", true)
     .maybeSingle();
 
   if (error) {
-    logger.error("getWallet failed", {
+    logger.error("wallet.getDefaultWallet failed", {
       requestId,
       code: error.code,
       message: error.message,
@@ -80,21 +78,23 @@ export async function getWallet(walletId: string, requestId: string): Promise<Wa
     return null;
   }
 
-  if (!data) return null;
+  if (!data) {
+    return null;
+  }
 
   return {
-    ...data,
-    balance: typeof data.balance === "number" ? data.balance : Number(data.balance) || 0,
+    id: data.id,
+    name: data.name,
+    balance: typeof data.balance === "number" ? data.balance : Number(data.balance),
+    is_default: data.is_default,
+    created_at: data.created_at,
   };
 }
 
 /**
- * Create a new wallet for the current user.
+ * Get wallet by ID for the current user.
  */
-export async function createWallet(
-  input: { name: string; balance: number; isDefault?: boolean },
-  requestId: string,
-): Promise<Wallet | null> {
+export async function getWalletById(walletId: string, requestId?: string): Promise<WalletData | null> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -104,7 +104,65 @@ export async function createWallet(
     return null;
   }
 
-  // If this wallet should be default, unset other defaults first
+  const { data, error } = await supabase
+    .from("wallets")
+    .select("id, name, balance, is_default, created_at")
+    .eq("id", walletId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    logger.error("wallet.getWalletById failed", {
+      requestId,
+      code: error.code,
+      message: error.message,
+    });
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    balance: typeof data.balance === "number" ? data.balance : Number(data.balance),
+    is_default: data.is_default,
+    created_at: data.created_at,
+  };
+}
+
+/**
+ * Get wallet by ID (alias for getWalletById for backward compatibility).
+ */
+export async function getWallet(walletId: string, requestId?: string): Promise<WalletData | null> {
+  return getWalletById(walletId, requestId);
+}
+
+type CreateWalletInput = {
+  name: string;
+  balance: number;
+  isDefault: boolean;
+};
+
+/**
+ * Create a new wallet for the current user.
+ */
+export async function createWallet(
+  input: CreateWalletInput,
+  requestId?: string,
+): Promise<WalletData | null> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return null;
+  }
+
+  // If this wallet is set as default, unset other default wallets first
   if (input.isDefault) {
     await supabase
       .from("wallets")
@@ -119,13 +177,13 @@ export async function createWallet(
       user_id: user.id,
       name: input.name,
       balance: input.balance,
-      is_default: input.isDefault ?? false,
+      is_default: input.isDefault,
     })
-    .select("id, user_id, name, balance, is_default, created_at")
+    .select("id, name, balance, is_default, created_at")
     .single();
 
   if (error) {
-    logger.error("createWallet failed", {
+    logger.error("wallet.createWallet failed", {
       requestId,
       code: error.code,
       message: error.message,
@@ -133,22 +191,29 @@ export async function createWallet(
     return null;
   }
 
-  if (!data) return null;
-
   return {
-    ...data,
-    balance: typeof data.balance === "number" ? data.balance : Number(data.balance) || 0,
+    id: data.id,
+    name: data.name,
+    balance: typeof data.balance === "number" ? data.balance : Number(data.balance),
+    is_default: data.is_default,
+    created_at: data.created_at,
   };
 }
 
+type UpdateWalletInput = {
+  name?: string;
+  balance?: number;
+  isDefault?: boolean;
+};
+
 /**
- * Update an existing wallet.
+ * Update a wallet for the current user.
  */
 export async function updateWallet(
   walletId: string,
-  updates: Partial<{ name: string; balance: number; isDefault: boolean }>,
-  requestId: string,
-): Promise<Wallet | null> {
+  input: UpdateWalletInput,
+  requestId?: string,
+): Promise<WalletData | null> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -158,8 +223,25 @@ export async function updateWallet(
     return null;
   }
 
-  // If setting as default, unset other defaults first
-  if (updates.isDefault === true) {
+  // Verify wallet belongs to user
+  const { data: existingWallet, error: checkError } = await supabase
+    .from("wallets")
+    .select("id, is_default")
+    .eq("id", walletId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (checkError || !existingWallet) {
+    logger.error("wallet.updateWallet: wallet not found or access denied", {
+      requestId,
+      code: checkError?.code,
+      message: checkError?.message,
+    });
+    return null;
+  }
+
+  // If this wallet is being set as default, unset other default wallets first
+  if (input.isDefault === true && !existingWallet.is_default) {
     await supabase
       .from("wallets")
       .update({ is_default: false })
@@ -168,25 +250,37 @@ export async function updateWallet(
       .neq("id", walletId);
   }
 
-  const dbUpdates: Database["public"]["Tables"]["wallets"]["Update"] = {};
-  if (updates.name !== undefined) dbUpdates.name = updates.name;
-  if (updates.balance !== undefined) dbUpdates.balance = updates.balance;
-  if (updates.isDefault !== undefined) dbUpdates.is_default = updates.isDefault;
+  const updates: {
+    name?: string;
+    balance?: number;
+    is_default?: boolean;
+  } = {};
 
-  if (Object.keys(dbUpdates).length === 0) {
-    return getWallet(walletId, requestId);
+  if (input.name !== undefined) {
+    updates.name = input.name;
+  }
+  if (input.balance !== undefined) {
+    updates.balance = input.balance;
+  }
+  if (input.isDefault !== undefined) {
+    updates.is_default = input.isDefault;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    // No updates, return existing wallet
+    return getWalletById(walletId, requestId);
   }
 
   const { data, error } = await supabase
     .from("wallets")
-    .update(dbUpdates)
+    .update(updates)
     .eq("id", walletId)
     .eq("user_id", user.id)
-    .select("id, user_id, name, balance, is_default, created_at")
+    .select("id, name, balance, is_default, created_at")
     .single();
 
   if (error) {
-    logger.error("updateWallet failed", {
+    logger.error("wallet.updateWallet failed", {
       requestId,
       code: error.code,
       message: error.message,
@@ -194,18 +288,20 @@ export async function updateWallet(
     return null;
   }
 
-  if (!data) return null;
-
   return {
-    ...data,
-    balance: typeof data.balance === "number" ? data.balance : Number(data.balance) || 0,
+    id: data.id,
+    name: data.name,
+    balance: typeof data.balance === "number" ? data.balance : Number(data.balance),
+    is_default: data.is_default,
+    created_at: data.created_at,
   };
 }
 
 /**
- * Delete a wallet. Only allowed if balance is 0.
+ * Delete a wallet for the current user.
+ * Only allowed if balance is 0.
  */
-export async function deleteWallet(walletId: string, requestId: string): Promise<boolean> {
+export async function deleteWallet(walletId: string, requestId?: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -215,17 +311,29 @@ export async function deleteWallet(walletId: string, requestId: string): Promise
     return false;
   }
 
-  // Check balance first
-  const wallet = await getWallet(walletId, requestId);
-  if (!wallet) {
+  // Verify wallet belongs to user and has zero balance
+  const { data: wallet, error: checkError } = await supabase
+    .from("wallets")
+    .select("id, balance")
+    .eq("id", walletId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (checkError || !wallet) {
+    logger.error("wallet.deleteWallet: wallet not found or access denied", {
+      requestId,
+      code: checkError?.code,
+      message: checkError?.message,
+    });
     return false;
   }
 
-  if (wallet.balance > 0) {
-    logger.warn("deleteWallet: cannot delete wallet with balance", {
+  const balance = typeof wallet.balance === "number" ? wallet.balance : Number(wallet.balance);
+  if (balance !== 0) {
+    logger.warn("wallet.deleteWallet: cannot delete wallet with non-zero balance", {
       requestId,
       walletId,
-      balance: wallet.balance,
+      balance,
     });
     return false;
   }
@@ -233,7 +341,7 @@ export async function deleteWallet(walletId: string, requestId: string): Promise
   const { error } = await supabase.from("wallets").delete().eq("id", walletId).eq("user_id", user.id);
 
   if (error) {
-    logger.error("deleteWallet failed", {
+    logger.error("wallet.deleteWallet failed", {
       requestId,
       code: error.code,
       message: error.message,

@@ -7,6 +7,7 @@ import { logger } from "@/lib/logger";
 import { buildRateLimitKey, checkRateLimit, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
 import { enforceSameOriginForServerAction } from "@/lib/security/server-action";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { updateWallet } from "@/services/wallet.service";
 import type { Database } from "@/lib/supabase/types";
 import {
   type CreateTransactionFormInput,
@@ -94,6 +95,7 @@ export async function createTransactionAction(
     category: parsed.data.category,
     date: date.toISOString(),
     description: parsed.data.description?.trim() || null,
+    wallet_id: parsed.data.wallet_id || null,
   });
 
   if (insertError) {
@@ -105,8 +107,46 @@ export async function createTransactionAction(
     return { ok: false, message: "İşlem kaydedilemedi. Lütfen tekrar deneyin." };
   }
 
+  // Update wallet balance if wallet_id is provided
+  if (parsed.data.wallet_id) {
+    // Get current wallet balance
+    const { data: wallet, error: walletError } = await supabase
+      .from("wallets")
+      .select("id, balance")
+      .eq("id", parsed.data.wallet_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (walletError || !wallet) {
+      logger.warn("createTransaction: wallet not found, skipping balance update", {
+        requestId: originCheck.requestId,
+        walletId: parsed.data.wallet_id,
+      });
+    } else {
+      const currentBalance = typeof wallet.balance === "number" ? wallet.balance : Number(wallet.balance);
+      const newBalance =
+        parsed.data.type === "income"
+          ? currentBalance + parsed.data.amount
+          : currentBalance - parsed.data.amount;
+
+      const updated = await updateWallet(
+        parsed.data.wallet_id,
+        { balance: newBalance },
+        originCheck.requestId,
+      );
+
+      if (!updated) {
+        logger.warn("createTransaction: wallet balance update failed", {
+          requestId: originCheck.requestId,
+          walletId: parsed.data.wallet_id,
+        });
+      }
+    }
+  }
+
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
+  revalidatePath("/wallets");
 
   return { ok: true };
 }
@@ -222,10 +262,23 @@ export async function updateTransactionAction(
     return invalidInputResult({ date: ["Geçerli bir tarih seçin."] });
   }
 
+  // Get old transaction to revert wallet balance changes
+  const { data: oldTx, error: oldTxError } = await supabase
+    .from("transactions")
+    .select("wallet_id, amount, type")
+    .eq("id", parsed.data.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (oldTxError || !oldTx) {
+    return { ok: false, message: "İşlem bulunamadı veya yetkiniz yok." };
+  }
+
   const { data, error } = await supabase
     .from("transactions")
     .update({
       amount: parsed.data.amount,
+      wallet_id: parsed.data.wallet_id || null,
       type: parsed.data.type,
       category: parsed.data.category,
       date: date.toISOString(),
@@ -248,8 +301,50 @@ export async function updateTransactionAction(
     return { ok: false, message: "İşlem bulunamadı veya yetkiniz yok." };
   }
 
+  // Revert old transaction's effect on wallet balance
+  if (oldTx.wallet_id) {
+    const { data: oldWallet } = await supabase
+      .from("wallets")
+      .select("id, balance")
+      .eq("id", oldTx.wallet_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (oldWallet) {
+      const oldBalance = typeof oldWallet.balance === "number" ? oldWallet.balance : Number(oldWallet.balance);
+      const oldAmount = typeof oldTx.amount === "number" ? oldTx.amount : Number(oldTx.amount);
+      // Revert: if it was income, subtract; if expense, add back
+      const revertedBalance =
+        oldTx.type === "income" ? oldBalance - oldAmount : oldBalance + oldAmount;
+
+      await updateWallet(oldTx.wallet_id, { balance: revertedBalance }, originCheck.requestId);
+    }
+  }
+
+  // Apply new transaction's effect on wallet balance
+  const newWalletId = parsed.data.wallet_id || null;
+  if (newWalletId) {
+    const { data: newWallet } = await supabase
+      .from("wallets")
+      .select("id, balance")
+      .eq("id", newWalletId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (newWallet) {
+      const currentBalance = typeof newWallet.balance === "number" ? newWallet.balance : Number(newWallet.balance);
+      const newBalance =
+        parsed.data.type === "income"
+          ? currentBalance + parsed.data.amount
+          : currentBalance - parsed.data.amount;
+
+      await updateWallet(newWalletId, { balance: newBalance }, originCheck.requestId);
+    }
+  }
+
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
+  revalidatePath("/wallets");
 
   return { ok: true };
 }
@@ -290,12 +385,23 @@ export async function deleteTransactionAction(
   });
   if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
 
-  const { data, error } = await supabase
+  // Get transaction before deleting to revert wallet balance
+  const { data: txToDelete, error: fetchError } = await supabase
+    .from("transactions")
+    .select("wallet_id, amount, type")
+    .eq("id", parsed.data.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (fetchError || !txToDelete) {
+    return { ok: false, message: "İşlem bulunamadı veya yetkiniz yok." };
+  }
+
+  const { error } = await supabase
     .from("transactions")
     .delete()
     .eq("id", parsed.data.id)
-    .eq("user_id", user.id)
-    .select("id");
+    .eq("user_id", user.id);
 
   if (error) {
     logger.error("deleteTransaction.delete failed", {
@@ -306,12 +412,29 @@ export async function deleteTransactionAction(
     return { ok: false, message: "İşlem silinemedi. Lütfen tekrar deneyin." };
   }
 
-  if (!data || data.length === 0) {
-    return { ok: false, message: "İşlem bulunamadı veya yetkiniz yok." };
+  // Revert transaction's effect on wallet balance
+  if (txToDelete.wallet_id) {
+    const { data: wallet } = await supabase
+      .from("wallets")
+      .select("id, balance")
+      .eq("id", txToDelete.wallet_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (wallet) {
+      const currentBalance = typeof wallet.balance === "number" ? wallet.balance : Number(wallet.balance);
+      const amount = typeof txToDelete.amount === "number" ? txToDelete.amount : Number(txToDelete.amount);
+      // Revert: if it was income, subtract; if expense, add back
+      const revertedBalance =
+        txToDelete.type === "income" ? currentBalance - amount : currentBalance + amount;
+
+      await updateWallet(txToDelete.wallet_id, { balance: revertedBalance }, originCheck.requestId);
+    }
   }
 
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
+  revalidatePath("/wallets");
 
   return { ok: true };
 }

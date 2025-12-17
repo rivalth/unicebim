@@ -71,7 +71,7 @@ export async function createWalletAction(
     {
       name: parsed.data.name,
       balance: parsed.data.balance,
-      isDefault: parsed.data.isDefault,
+      isDefault: parsed.data.isDefault ?? false,
     },
     originCheck.requestId,
   );
@@ -126,7 +126,7 @@ export async function updateWalletAction(
     parsed.data.id,
     {
       name: parsed.data.name,
-      balance: parsed.data.balance,
+      balance: parsed.data.balance, // Update balance (service handles initial_balance internally)
       isDefault: parsed.data.isDefault,
     },
     originCheck.requestId,
@@ -248,40 +248,68 @@ export async function transferBetweenWalletsAction(
     };
   }
 
-  // Perform transfer: Update both wallets in a transaction-like manner
-  // Note: In production, use a DB transaction, but Supabase client doesn't support transactions easily.
-  // For MVP, we'll do sequential updates and handle partial failures manually.
+  // Perform transfer by creating two transactions:
+  // 1. Expense from source wallet
+  // 2. Income to destination wallet
+  // This way balance is automatically calculated from transactions
 
-  // Update from wallet (decrease balance)
-  const fromUpdated = await walletService.updateWallet(
-    parsed.data.fromWalletId,
-    { balance: fromWallet.balance - parsed.data.amount },
-    originCheck.requestId,
-  );
+  const transferDate = new Date(parsed.data.date);
+  if (!Number.isFinite(transferDate.getTime())) {
+    return { ok: false, message: "Geçersiz tarih." };
+  }
 
-  if (!fromUpdated) {
+  // Create expense transaction from source wallet
+  const { error: expenseError } = await supabase.from("transactions").insert({
+    user_id: user.id,
+    amount: parsed.data.amount,
+    type: "expense",
+    category: "Sabitler", // Transfer category
+    date: transferDate.toISOString(),
+    description: `Transfer: ${toWallet.name} cüzdanına`,
+    wallet_id: parsed.data.fromWalletId,
+  });
+
+  if (expenseError) {
+    logger.error("transferBetweenWallets: expense transaction failed", {
+      requestId: originCheck.requestId,
+      code: expenseError.code,
+      message: expenseError.message,
+    });
     return { ok: false, message: "Transfer başlatılamadı. Lütfen tekrar deneyin." };
   }
 
-  // Update to wallet (increase balance)
-  const toUpdated = await walletService.updateWallet(
-    parsed.data.toWalletId,
-    { balance: toWallet.balance + parsed.data.amount },
-    originCheck.requestId,
-  );
+  // Create income transaction to destination wallet
+  const { error: incomeError } = await supabase.from("transactions").insert({
+    user_id: user.id,
+    amount: parsed.data.amount,
+    type: "income",
+    category: "KYK/Burs", // Transfer category (using income category)
+    date: transferDate.toISOString(),
+    description: `Transfer: ${fromWallet.name} cüzdanından`,
+    wallet_id: parsed.data.toWalletId,
+  });
 
-  if (!toUpdated) {
-    // Rollback: restore from wallet balance
-    await walletService.updateWallet(
-      parsed.data.fromWalletId,
-      { balance: fromWallet.balance },
-      originCheck.requestId,
-    );
+  if (incomeError) {
+    // Rollback: delete the expense transaction
+    // Note: In production, use a DB transaction for atomicity
+    logger.error("transferBetweenWallets: income transaction failed", {
+      requestId: originCheck.requestId,
+      code: incomeError.code,
+      message: incomeError.message,
+    });
+    // Try to delete the expense transaction (best effort)
+    await supabase
+      .from("transactions")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("wallet_id", parsed.data.fromWalletId)
+      .eq("type", "expense")
+      .eq("category", "Sabitler")
+      .eq("amount", parsed.data.amount)
+      .order("created_at", { ascending: false })
+      .limit(1);
     return { ok: false, message: "Transfer tamamlanamadı. Lütfen tekrar deneyin." };
   }
-
-  // Optional: Record transfer as a transaction for audit trail
-  // For MVP, we skip this to keep it simple, but in production you might want to track transfers
 
   revalidatePath("/dashboard");
   return { ok: true };
