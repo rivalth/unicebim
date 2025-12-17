@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Footer } from "@/components/layout/footer";
 import { PublicHeader } from "@/components/layout/public-header";
-import { FeatureGrid } from "@/components/features/feature-grid";
 import { FAQAccordion } from "@/components/features/faq-accordion";
 import { ScrollReveal, FadeIn } from "@/components/animations";
 import {
@@ -25,6 +24,8 @@ import {
   generateFAQPageSchema,
 } from "@/components/seo/structured-data";
 import { getCachedUser } from "@/lib/supabase/server";
+import Image from "next/image";
+import { HERO_URL } from "@/components/brand/logo";
 
 const faqItems = [
   {
@@ -83,27 +84,27 @@ export default async function Home() {
       <main id="main-content" className="flex-1" role="main">
         {/* Hero Section */}
         <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
-        <AnimatedContainer className="grid gap-10 lg:grid-cols-2 lg:items-center">
-          <div className="space-y-6">
+          <AnimatedContainer className="grid gap-10 lg:grid-cols-2 lg:items-center">
+            <div className="space-y-6">
               <div className="space-y-4">
                 <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Öğrenci bütçeni yönet. Harcamalarını kontrol et.
-            </h1>
+                  Öğrenci bütçeni yönet. Harcamalarını kontrol et.
+                </h1>
                 <p className="text-pretty text-base text-muted-foreground sm:text-lg lg:text-xl">
                   UniCebim ile gelir ve giderlerini kategorilere ayır, aylık hedef bütçe belirle
                   ve harcama alışkanlıklarını net bir şekilde gör.
-            </p>
+                </p>
               </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg">
-                <Link href="/register">
+                  <Link href="/register">
                     Ücretsiz Başla <ArrowRight className="ml-2 size-4" aria-hidden="true" />
-                </Link>
-              </Button>
+                  </Link>
+                </Button>
                 <Button asChild variant="outline" size="lg">
-                <Link href="/login">Giriş yap</Link>
-              </Button>
-            </div>
+                  <Link href="/login">Giriş yap</Link>
+                </Button>
+              </div>
               <FadeIn delay={0.4}>
                 <div className="flex items-center gap-6 pt-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
@@ -120,56 +121,25 @@ export default async function Home() {
                   </div>
                 </div>
               </FadeIn>
-          </div>
+            </div>
 
-          <AnimatedContainer className="grid gap-4 sm:grid-cols-2">
-              <ScrollReveal delay={0.3} direction="right">
-                <div className="rounded-lg border bg-card p-6 shadow-sm transition-all hover:shadow-md hover:scale-[1.02]">
-                  <div className="mb-2 flex items-center gap-2">
-                    <PieChart className="size-5 text-primary" aria-hidden="true" />
-                    <h3 className="font-semibold">Özet</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Gelir-gider dengen tek ekranda. Aylık hedef bütçe ve gerçekleşen harcamayı
-                    karşılaştır.
-                  </p>
+            <div className="relative flex items-center justify-center lg:order-last">
+              <FadeIn delay={0.3}>
+                <div className="animate-float">
+                  <Image
+                    src={HERO_URL}
+                    alt="UniCebim Dashboard Mockup"
+                    width={1000}
+                    height={1000}
+                    className="w-full h-auto scale-[1.25] max-w-lg drop-shadow-none"
+                    style={{ filter: 'none' }}
+                    priority
+                  />
                 </div>
-              </ScrollReveal>
-
-              <ScrollReveal delay={0.4} direction="right">
-                <div className="rounded-lg border bg-card p-6 shadow-sm transition-all hover:shadow-md hover:scale-[1.02]">
-                  <div className="mb-2 flex items-center gap-2">
-                    <ShieldCheck className="size-5 text-primary" aria-hidden="true" />
-                    <h3 className="font-semibold">Güvenli</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Supabase Auth ile oturum yönetimi. Verilerin kullanıcı bazında izole; RLS ile
-                    korumaya uygun.
-                  </p>
-                </div>
-              </ScrollReveal>
-            </AnimatedContainer>
+              </FadeIn>
+            </div>
           </AnimatedContainer>
         </section>
-
-        <Separator />
-
-        {/* Features Section */}
-        <section id="features" className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
-          <ScrollReveal className="mb-12 space-y-4 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Tüm Özellikler Tek Yerde
-            </h2>
-            <p className="mx-auto max-w-2xl text-muted-foreground">
-              UniCebim, öğrencilerin bütçe yönetimini kolaylaştırmak için tasarlanmış kapsamlı
-              özellikler sunar.
-            </p>
-          </ScrollReveal>
-          <ScrollReveal delay={0.2}>
-            <FeatureGrid />
-          </ScrollReveal>
-        </section>
-
         <Separator />
 
         {/* Benefits Section */}
