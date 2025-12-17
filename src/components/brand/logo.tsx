@@ -7,6 +7,8 @@ const LOGO_URLS = {
   ico: "https://yhsnzizfskkwmzflnhjw.supabase.co/storage/v1/object/public/wp-content/logo.ico",
 } as const;
 
+export const HERO_URL = "https://yhsnzizfskkwmzflnhjw.supabase.co/storage/v1/object/public/wp-content/hero-mockup.png";
+
 export const LOGO_URL = LOGO_URLS.png;
 
 interface LogoProps {

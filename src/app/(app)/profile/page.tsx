@@ -10,6 +10,7 @@ import { ChangePasswordForm } from "@/features/profile/change-password-form";
 import BudgetSettingsForm from "@/features/profile/budget-settings-form";
 import WalletsList from "@/features/wallets/wallets-list";
 import AddWalletForm from "@/features/wallets/add-wallet-form";
+import { ThemeSelector } from "@/components/theme/theme-selector";
 
 export default async function ProfilePage() {
   const user = await getCachedUser();
@@ -173,6 +174,16 @@ export default async function ProfilePage() {
             <AddWalletForm />
           </div>
           <WalletsList wallets={wallets} />
+        </CardContent>
+      </Card>
+
+      {/* Theme Settings */}
+      <Card>
+        <CardHeader className="pb-2 sm:pb-3">
+          <CardTitle className="text-base sm:text-lg">Tema Tercihi</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ThemeSelector />
         </CardContent>
       </Card>
 

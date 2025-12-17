@@ -384,9 +384,9 @@ export default async function DashboardPage() {
 
       {/* Upcoming Subscription Renewals Alert */}
       {upcomingSubscriptions.length > 0 && (
-        <Alert className="border-amber-500/50 bg-amber-500/10">
-          <AlertTriangle className="size-4 text-amber-600" />
-          <AlertTitle className="text-amber-900 dark:text-amber-100">Yaklaşan Abonelik Ödemeleri</AlertTitle>
+        <Alert className="border-amber-300 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10">
+          <AlertTriangle className="size-4 text-amber-600 dark:text-amber-500" />
+          <AlertTitle className="text-amber-950 dark:text-amber-100">Yaklaşan Abonelik Ödemeleri</AlertTitle>
           <AlertDescription className="mt-2 space-y-2">
             {upcomingSubscriptions.map((sub) => (
               <div key={sub.id} className="flex items-center justify-between text-sm">
@@ -402,12 +402,12 @@ export default async function DashboardPage() {
                       unoptimized
                     />
                   ) : (
-                    <Calendar className="size-4 text-amber-600" aria-hidden="true" />
+                    <Calendar className="size-4 text-amber-700 dark:text-amber-500" aria-hidden="true" />
                   )}
-                  <span className="font-medium">{sub.name}</span>
+                  <span className="font-medium text-foreground">{sub.name}</span>
                 </div>
                 <div className="text-right">
-                  <div className="font-semibold text-amber-900 dark:text-amber-100">
+                  <div className="font-semibold text-amber-950 dark:text-amber-100">
                     {formatTRY(sub.amount)} {sub.currency}
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -423,7 +423,7 @@ export default async function DashboardPage() {
             <div className="pt-2">
               <Link
                 href="/dashboard/subscriptions"
-                className="text-xs font-medium text-amber-900 underline underline-offset-4 hover:text-amber-700 dark:text-amber-100 dark:hover:text-amber-200"
+                className="text-xs font-medium text-amber-950 underline underline-offset-4 hover:text-amber-800 dark:text-amber-100 dark:hover:text-amber-200"
               >
                 Tüm abonelikleri görüntüle →
               </Link>
