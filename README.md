@@ -1,60 +1,78 @@
-# UniCebim (Student Budget Tracker MVP)
+# UniCebim (Üniversite Bütçe Takipçisi)
 
-UniCebim is a modern budget & expense tracker for university students.
+UniCebim, üniversite öğrencilerinin bütçelerini kolayca yönetebilmeleri, harcamalarını takip edebilmeleri ve finansal durumlarını analiz edebilmeleri için tasarlanmış modern bir web uygulamasıdır.
 
-## Tech Stack
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20DB-green)](https://supabase.com/)
 
-- Next.js (App Router, `src/app`)
-- TypeScript
-- Tailwind CSS
-- shadcn/ui-style components
-- React Hook Form + Zod
-- Zustand (client state)
-- Supabase (Auth + Postgres)
-- Vitest + Testing Library
+## 🚀 Özellikler
 
-## Local Setup
+- **Akıllı Bakiye Yönetimi**: Mevcut bakiyenizi farklı cüzdanlar (Nakit, Banka, vb.) üzerinden takip edin.
+- **Yemekhane Endeksi**: Bakiyenizin kaç okul yemeğine karşılık geldiğini anında görün.
+- **Harca & Takip Et**: Gelir ve giderlerinizi kategorize ederek kaydedin.
+- **Gelecek Ödemeler**: Kira, yurt ücreti veya faturalar gibi gelecek ödemelerinizi planlayın.
+- **Abonelik Takibi**: Netflix, Spotify gibi düzenli ödemelerinizi tek yerden yönetin.
+- **Görsel Analizler**: Harcama trendlerinizi ve kategori dağılımlarınızı grafiklerle inceleyin.
+- **Sosyal Skor**: Finansal alışkanlıklarınıza göre sosyal skorunuzu takip edin.
+- **Dışa Aktarma**: Verilerinizi CSV veya Excel formatında yedekleyin.
 
-1. Install deps:
+## 🛠 Teknoloji Yığını
 
-```bash
-yarn
-```
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS
+- **State Management**: Zustand
+- **Formlar**: React Hook Form + Zod
+- **Bileşen Kütüphanesi**: shadcn/ui
+- **Backend & Auth**: Supabase (PostgreSQL + Auth + Storage)
+- **Grafikler**: Recharts
+- **Test**: Vitest + Testing Library
 
-2. Configure env:
+## 📦 Kurulum
 
-```bash
-cp env.example .env.local
-```
+Projeyi yerel ortamınızda çalıştırmak için aşağıdaki adımları izleyin:
 
-Fill `.env.local` with values from Supabase Dashboard → Project Settings → API:
+1.  **Depoyu kopyalayın**:
+    ```bash
+    git clone https://github.com/rivalth/unicebim.git
+    cd unicebim
+    ```
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+2.  **Bağımlılıkları yükleyin**:
+    ```bash
+    yarn
+    ```
 
-3. Run dev server:
+3.  **Çevresel Değişkenleri Yapılandırın**:
+    `env.example` dosyasını `.env.local` olarak kopyalayın ve Supabase bilgilerinizi girin:
+    ```bash
+    cp env.example .env.local
+    ```
 
-```bash
-yarn dev
-```
+4.  **Veritabanı Kurulumu**:
+    `docs/supabase.sql` dosyasındaki SQL komutlarını Supabase SQL Editor üzerinden çalıştırın.
 
-Open `http://localhost:3000`.
+5.  **Geliştirme Sunucusunu Başlatın**:
+    ```bash
+    yarn dev
+    ```
 
-## Scripts
+Tarayıcınızda `http://localhost:3000` adresine giderek uygulamayı kullanmaya başlayabilirsiniz.
 
-- `yarn lint`
-- `yarn test` (watch)
-- `yarn test:run` (CI)
-- `yarn build`
+## 📄 Dokümantasyon
 
-## API Docs
+Daha fazla detay için `docs` klasörünü inceleyebilirsiniz:
+- [Veritabanı Şeması](docs/supabase.sql)
+- [API Dokümantasyonu (OpenAPI)](docs/openapi.yaml)
+- [Zaman Dilimi Stratejisi](docs/timezone-strategy.md)
 
-OpenAPI spec: `docs/openapi.yaml`
+## 🤝 Katkıda Bulunma
 
-## Supabase Schema (assumed)
+Katkılarınızı bekliyoruz! Lütfen önce [CONTRIBUTING.md](CONTRIBUTING.md) dosyasını inceleyin.
 
-See prompt/SQL used for the MVP tables:
+## 🛡 Lisans
 
-- `profiles` (users)
-- `transactions`
+Bu proje **MIT Lisansı** ile lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakabilirsiniz.
 
+---
+*Geliştiren: [Can](https://github.com/rivalth)*

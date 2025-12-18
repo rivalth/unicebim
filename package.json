@@ -1,7 +1,18 @@
 {
   "name": "unicebim",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Modern budget & expense tracker for university students",
+  "author": "Can",
+  "license": "MIT",
+  "homepage": "https://github.com/rivalth/unicebim",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rivalth/unicebim.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rivalth/unicebim/issues"
+  },
+  "private": false,
   "scripts": {
     "dev": "NODE_OPTIONS='--no-warnings=DeprecationWarning:url.parse' next dev",
     "build": "next build",

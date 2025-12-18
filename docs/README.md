@@ -1,72 +1,48 @@
-# UniCebim Docs
+# UniCebim Dokümantasyonu
 
-## API (OpenAPI)
+UniCebim projesinin teknik detayları ve kullanım rehberleri burada yer almaktadır.
 
-- Spec file: `docs/openapi.yaml`
-- Local server (default): `http://localhost:3000`
+## 🚀 Başlangıç
+- **[Başlangıç Rehberi](GETTING_STARTED.md)**: Projeyi sıfırdan kurmak için adım adım rehber.
 
-## Database (Supabase)
+## 🛠 Teknik Detaylar
+- **[Veritabanı Şeması (Supabase)](supabase.sql)**: PostgreSQL tabloları, RLS politikaları ve trigger'lar.
+- **[API Dokümantasyonu (OpenAPI)](openapi.yaml)**: REST API endpoint'leri ve veri yapıları.
+- **[Zaman Dilimi Stratejisi](timezone-strategy.md)**: Uygulamanın tarih ve saat yönetim politikası.
 
-- Schema + RLS script: `docs/supabase.sql`
+## 📈 Geliştirme Süreci
+- **[Geliştirme Önerileri (Backlog)](gelistirme-onerileri.md)**: Gelecek özellikler ve teknik iyileştirmeler.
+- **[Eksik Kalan Maddeler](eksik-kalan-maddeler.md)**: Mevcut sürümdeki bilinen eksikler.
+- **[Profil Sayfası Önerileri](profil-sayfasi-onerileri.md)**: Kullanıcı profili için planlanan geliştirmeler.
 
-## Supabase Types (TypeScript)
+## 🏗 Mimari Notlar
+- Bu proje **Next.js 15 (App Router)** ve **Supabase SSR** mimarisi üzerine inşa edilmiştir.
+- Tip güvenliği için **TypeScript** ve **Zod** kullanılmaktadır.
+- UI bileşenleri **shadcn/ui** tabanlıdır ve **Tailwind CSS** ile özelleştirilmiştir.
 
-This repo keeps a minimal `Database` type in `src/lib/supabase/types.ts`.
+---
 
-For production-grade typing, generate types from your Supabase project:
+### Supabase Tipleri (TypeScript)
+
+Projede `src/lib/supabase/types.ts` altında temel tipler bulunmaktadır. Kendi Supabase projenizden güncel tipleri üretmek için:
 
 ```bash
 yarn supabase:types
 ```
 
-Requirements:
+**Gereksinimler:**
+- Supabase CLI yüklü olmalı (`supabase`)
+- `SUPABASE_PROJECT_ID` env ayarlı olmalı veya `supabase link` yapılmış olmalı.
 
-- Supabase CLI installed (`supabase`)
-- Either:
-  - `SUPABASE_PROJECT_ID` env set, or
-  - `supabase link --project-ref <project-ref>` completed
+### RLS Entegrasyon Testleri
 
-Output defaults to: `src/lib/supabase/types.generated.ts`
-
-## RLS Integration Tests (optional)
-
-There is an integration test suite that validates RLS isolation. It is **skipped by default** unless you provide:
+RLS izolasyonunu doğrulamak için bir test süiti bulunmaktadır. Bu testler varsayılan olarak atlanır. Çalıştırmak için `.env.local` dosyasına aşağıdaki bilgileri ekleyin:
 
 - `SUPABASE_TEST_URL`
 - `SUPABASE_TEST_ANON_KEY`
 - `SUPABASE_TEST_SERVICE_ROLE_KEY`
 
-Then run:
-
+Ardından:
 ```bash
 yarn test:run
 ```
-
-## Auth (Supabase Email Confirmation)
-
-UniCebim uses Supabase email confirmation links.
-
-- **Callback route**: `/auth/callback`
-- After confirmation, user is redirected to: `/auth/confirming` → `/dashboard`
-
-Supabase Dashboard settings to verify:
-
-- **Authentication → URL Configuration**
-  - Site URL: `http://localhost:3000` (for local dev)
-  - Redirect URLs should include: `http://localhost:3000/auth/callback`
-
-## Timezone Strategy
-
-UniCebim uses **UTC-based timezone strategy** for all date/time operations. See `docs/timezone-strategy.md` for detailed documentation.
-
-**Key points:**
-- All timestamps stored in UTC (`timestamptz` in PostgreSQL)
-- Month boundaries calculated in UTC
-- Date inputs from users are interpreted as UTC dates
-- Display formatting uses browser's local timezone
-
-**Related files:**
-- `src/lib/month.ts`: UTC month range utilities
-- `docs/timezone-strategy.md`: Complete timezone strategy documentation
-
-
