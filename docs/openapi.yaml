@@ -314,6 +314,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/payments:
+    get:
+      tags: [Payments]
+      summary: Get all upcoming payments for the current user
+      description: |
+        Returns all upcoming payments (both paid and unpaid) for the authenticated user.
+        Includes analysis data such as days until due and total unpaid amount.
+        
+        This endpoint is used by the dashboard to display payment warnings and feasibility analysis.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            x-request-id:
+              description: Request correlation ID
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PaymentWithAnalysis"
+                  meta:
+                    type: object
+                    required: [requestId, count]
+                    properties:
+                      requestId:
+                        type: string
+                      count:
+                        type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -342,6 +382,7 @@ components:
         3. Subsequent requests to protected endpoints include these cookies automatically
         4. Server-side route handlers and Server Actions validate the session using `createSupabaseServerClient()`
         5. If access token expires, middleware automatically refreshes it using the refresh token
+        6. Session validation happens on every request via Supabase RLS policies
 
         ## For API Clients (cURL, Postman, etc.)
 
@@ -356,7 +397,14 @@ components:
         - Cookies are automatically included by browsers but must be manually set for API clients
         - CSRF protection is enforced for state-changing operations (POST/PATCH/DELETE)
         - Rate limiting applies to all authenticated endpoints
-        - Session validation happens on every request via Supabase RLS policies
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
 
   schemas:
     ErrorResponse:
@@ -493,60 +541,6 @@ components:
 
         Note: `monthly_fixed_expenses` is derived from `fixed_expenses` rows and is not directly writable.
 
-  /api/payments:
-    get:
-      tags: [Payments]
-      summary: Get all upcoming payments for the current user
-      description: |
-        Returns all upcoming payments (both paid and unpaid) for the authenticated user.
-        Includes analysis data such as days until due and total unpaid amount.
-        
-        This endpoint is used by the dashboard to display payment warnings and feasibility analysis.
-      security:
-        - cookieAuth: []
-      responses:
-        "200":
-          description: OK
-          headers:
-            x-request-id:
-              description: Request correlation ID
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, meta]
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/PaymentWithAnalysis"
-                  meta:
-                    type: object
-                    required: [requestId, count]
-                    properties:
-                      requestId:
-                        type: string
-                      count:
-                        type: integer
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
-components:
-  securitySchemes:
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: sb-access-token
-  responses:
-    Unauthorized:
-      description: Unauthorized - authentication required
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ApiError"
-  schemas:
     PaymentWithAnalysis:
       type: object
       required: [id, user_id, name, amount, due_date, is_paid, created_at, updated_at, days_until_due, total_unpaid_amount]
@@ -597,6 +591,7 @@ components:
           type: number
           description: Total amount of all unpaid payments for the user
           example: 3000.00
+
     ApiError:
       type: object
       required: [message, code, requestId]
@@ -611,5 +606,3 @@ components:
         requestId:
           type: string
           description: Request correlation ID
-
-

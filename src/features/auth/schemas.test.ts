@@ -25,6 +25,7 @@ describe("auth schemas", () => {
         email: "ada@example.com",
         password: "password1",
         passwordConfirm: "password1",
+        acceptTerms: true,
       });
 
       expect(parsed.fullName).toBe("Ada Lovelace");
@@ -36,6 +37,7 @@ describe("auth schemas", () => {
         email: "ada@example.com",
         password: "password1",
         passwordConfirm: "password2",
+        acceptTerms: true,
       });
 
       expect(result.success).toBe(false);
