@@ -627,7 +627,10 @@ export default async function DashboardPage() {
           </Link>
         </CardHeader>
         <CardContent>
-          <TransactionHistory transactions={transactions.slice(0, 5)} />
+          <TransactionHistory
+            transactions={transactions.slice(0, 5)}
+            wallets={walletOptions}
+          />
           {transactions.length === 0 && (
             <div className="flex flex-col items-center gap-4 py-8 text-center">
               <p className="text-sm text-muted-foreground">Henüz işlem yok.</p>

@@ -262,8 +262,10 @@ export async function POST(request: NextRequest) {
       type: parsed.data.type,
       category: parsed.data.category,
       date: date.toISOString(),
+      description: parsed.data.description?.trim() || null,
+      wallet_id: parsed.data.wallet_id || null,
     })
-    .select("id, amount, type, category, date")
+    .select("id, amount, type, category, date, description, wallet_id")
     .single();
 
   if (error) {

@@ -107,7 +107,7 @@ export default async function TransactionsListPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("transactions")
-      .select("id, amount, type, category, date, wallet_id, wallets(id, name)")
+      .select("id, amount, type, category, date, description, wallet_id, wallets(id, name)")
       .eq("user_id", user.id)
       .gte("date", month.start.toISOString())
       .lt("date", month.end.toISOString())
@@ -288,6 +288,7 @@ export default async function TransactionsListPage({
             initialTransactions={transactions}
             initialNextCursor={nextCursor}
             pageSize={PAGE_SIZE}
+            wallets={wallets}
           />
         </CardContent>
       </Card>

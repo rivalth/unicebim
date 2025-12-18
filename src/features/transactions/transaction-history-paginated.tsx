@@ -18,11 +18,13 @@ export default function TransactionHistoryPaginated({
   initialTransactions,
   initialNextCursor,
   pageSize = 50,
+  wallets = [],
 }: {
   month: string; // YYYY-MM
   initialTransactions: TransactionRow[];
   initialNextCursor: string | null;
   pageSize?: number;
+  wallets?: Array<{ id: string; name: string }>;
 }) {
   const [transactions, setTransactions] = React.useState<TransactionRow[]>(initialTransactions);
   const [nextCursor, setNextCursor] = React.useState<string | null>(initialNextCursor);
@@ -160,7 +162,7 @@ export default function TransactionHistoryPaginated({
           </div>
         </div>
       ) : (
-        <TransactionHistory transactions={filteredTransactions} />
+        <TransactionHistory transactions={filteredTransactions} wallets={wallets} />
       )}
 
       {error ? (

@@ -61,6 +61,8 @@ export function mapTransactionRow(
     type: "income" | "expense";
     category: string;
     date: string;
+    description?: string | null;
+    wallet_id?: string | null;
     user_id?: string;
   },
 ): {
@@ -70,6 +72,8 @@ export function mapTransactionRow(
   type: "income" | "expense";
   category: string;
   date: string;
+  description: string | null;
+  wallet_id: string | null;
 } {
   const rawAmount = (row as unknown as { amount: unknown }).amount;
   const amount = typeof rawAmount === "number" ? rawAmount : Number(rawAmount);
@@ -81,6 +85,8 @@ export function mapTransactionRow(
     type: row.type,
     category: row.category,
     date: row.date,
+    description: row.description ?? null,
+    wallet_id: row.wallet_id ?? null,
   };
 }
 

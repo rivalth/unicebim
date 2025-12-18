@@ -47,6 +47,7 @@ export type TransactionRow = {
   type: "income" | "expense";
   category: string;
   date: string; // ISO
+  description?: string | null;
   wallet_id?: string | null;
   wallet_name?: string | null;
 };
@@ -55,7 +56,13 @@ function isKnownCategory(category: string): category is TransactionCategory {
   return (ALL_CATEGORIES as readonly string[]).includes(category);
 }
 
-export default function TransactionHistory({ transactions }: { transactions: TransactionRow[] }) {
+export default function TransactionHistory({
+  transactions,
+  wallets = [],
+}: {
+  transactions: TransactionRow[];
+  wallets?: Array<{ id: string; name: string }>;
+}) {
   const router = useRouter();
   const [editing, setEditing] = React.useState<TransactionRow | null>(null);
   const [isEditOpen, setEditOpen] = React.useState(false);
@@ -72,6 +79,8 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
       type: "expense",
       category: "Beslenme",
       date: toLocalYmd(),
+      description: "",
+      wallet_id: "",
     },
   });
 
@@ -91,6 +100,8 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
       type: editing.type,
       category,
       date: toLocalYmd(new Date(editing.date)),
+      description: editing.description ?? "",
+      wallet_id: editing.wallet_id ?? "",
     });
   }, [editing, form]);
 
@@ -170,6 +181,11 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
                     {t.type === "income" ? "Gelir" : "Gider"}
                     {t.wallet_name && ` • ${t.wallet_name}`}
                   </div>
+                  {t.description && (
+                    <div className="truncate text-[10px] text-muted-foreground/80 mt-0.5 italic">
+                      &quot;{t.description}&quot;
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -296,6 +312,41 @@ export default function TransactionHistory({ transactions }: { transactions: Tra
               {form.formState.errors.date?.message ? (
                 <p className="text-sm text-destructive" role="alert">
                   {form.formState.errors.date.message}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit-wallet">Cüzdan</Label>
+              <select
+                id="edit-wallet"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                {...form.register("wallet_id")}
+              >
+                <option value="">Cüzdan seçilmedi</option>
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+              {form.formState.errors.wallet_id?.message ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {form.formState.errors.wallet_id.message}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description">Açıklama (Opsiyonel)</Label>
+              <Input
+                id="edit-description"
+                placeholder="İşlem detayı..."
+                {...form.register("description")}
+              />
+              {form.formState.errors.description?.message ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {form.formState.errors.description.message}
                 </p>
               ) : null}
             </div>
