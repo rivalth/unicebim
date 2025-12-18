@@ -3,7 +3,7 @@
 UniCebim, üniversite öğrencilerinin bütçelerini kolayca yönetebilmeleri, harcamalarını takip edebilmeleri ve finansal durumlarını analiz edebilmeleri için tasarlanmış modern bir web uygulamasıdır.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20DB-green)](https://supabase.com/)
 
