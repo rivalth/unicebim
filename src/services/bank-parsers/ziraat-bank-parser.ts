@@ -24,7 +24,23 @@ export async function parseZiraatBankFile(
 
   try {
     // Read Excel file
-    const workbook = XLSX.readFile(filePath);
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.readFile(filePath);
+    } catch (readError) {
+      logger.error("ziraatBankParser.readFile failed", {
+        error: readError instanceof Error ? readError.message : String(readError),
+        filePath,
+        walletId,
+        userId,
+      });
+      return {
+        transactions: [],
+        errors: [
+          `Dosya okunamadı: ${readError instanceof Error ? readError.message : "Bilinmeyen hata"}`,
+        ],
+      };
+    }
     const firstSheetName = workbook.SheetNames[0];
     if (!firstSheetName) {
       return {

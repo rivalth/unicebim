@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { writeFile, unlink, mkdir } from "node:fs/promises";
+import { writeFile, unlink, mkdir, access } from "node:fs/promises";
+import { constants } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -688,16 +689,51 @@ export async function uploadBankStatementAction(
   }
 
   // Save file temporarily
-  const tempDir = join(tmpdir(), "unicebim-uploads");
-  await mkdir(tempDir, { recursive: true });
-  const fileExtension = file.name.split(".").pop() || "xlsx";
-  const tempFilePath = join(tempDir, `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`);
-
+  let tempFilePath: string | null = null;
   try {
+    const tempDir = join(tmpdir(), "unicebim-uploads");
+    
+    // Create directory if it doesn't exist
+    try {
+      await mkdir(tempDir, { recursive: true });
+    } catch (mkdirError) {
+      logger.error("uploadBankStatement.mkdir failed", {
+        requestId: originCheck.requestId,
+        error: mkdirError instanceof Error ? mkdirError.message : String(mkdirError),
+        tempDir,
+      });
+      return { ok: false, message: "Geçici dizin oluşturulamadı." };
+    }
+
+    const fileExtension = file.name.split(".").pop() || "xlsx";
+    tempFilePath = join(tempDir, `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`);
+
     // Write file to temp directory
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    await writeFile(tempFilePath, buffer);
+    
+    try {
+      await writeFile(tempFilePath, buffer);
+      
+      // Verify file was written and is accessible
+      try {
+        await access(tempFilePath, constants.F_OK | constants.R_OK);
+      } catch (accessError) {
+        logger.error("uploadBankStatement.fileAccess failed", {
+          requestId: originCheck.requestId,
+          error: accessError instanceof Error ? accessError.message : String(accessError),
+          tempFilePath,
+        });
+        return { ok: false, message: "Dosya yazıldı ama erişilemedi." };
+      }
+    } catch (writeError) {
+      logger.error("uploadBankStatement.writeFile failed", {
+        requestId: originCheck.requestId,
+        error: writeError instanceof Error ? writeError.message : String(writeError),
+        tempFilePath,
+      });
+      return { ok: false, message: "Dosya kaydedilemedi." };
+    }
 
     // Parse bank file
     const parseResult = await parseBankFile(tempFilePath, bank as BankName, {
@@ -825,14 +861,16 @@ export async function uploadBankStatementAction(
     };
   } finally {
     // Clean up temp file
-    try {
-      await unlink(tempFilePath);
-    } catch (cleanupError) {
-      logger.warn("uploadBankStatement.cleanup failed", {
-        requestId: originCheck.requestId,
-        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        filePath: tempFilePath,
-      });
+    if (tempFilePath) {
+      try {
+        await unlink(tempFilePath);
+      } catch (cleanupError) {
+        logger.warn("uploadBankStatement.cleanup failed", {
+          requestId: originCheck.requestId,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          filePath: tempFilePath,
+        });
+      }
     }
   }
 }
