@@ -50,7 +50,7 @@
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "react-dropzone": "^14.3.8",
-    "react-hook-form": "^7.68.0",
+    "react-hook-form": "^7.69.0",
     "recharts": "^3.5.1",
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.4.0",
