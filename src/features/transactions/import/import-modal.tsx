@@ -20,7 +20,8 @@ import {
   type BankStatementUploadResult,
 } from "@/app/actions/transactions";
 import { toast } from "sonner";
-import { getSupportedBanks, type BankName } from "@/services/bank-parsers";
+import { getSupportedBanks } from "@/services/bank-parsers/banks";
+import type { BankName } from "@/services/bank-parsers";
 import { getWallets } from "@/services/wallet.service";
 import { logger } from "@/lib/logger";
 

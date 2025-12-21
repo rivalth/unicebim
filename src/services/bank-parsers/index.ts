@@ -30,16 +30,6 @@ export async function parseBankFile(
   }
 }
 
-/**
- * Get list of supported banks.
- */
-export function getSupportedBanks(): Array<{ value: BankName; label: string }> {
-  return [
-    { value: "ziraat", label: "Ziraat Bankası" },
-    { value: "is-bank", label: "İş Bankası" },
-  ];
-}
-
 export type { BankName, ParseResult, ParsedTransaction } from "./types";
 export type { BankParserOptions } from "./types";
 
