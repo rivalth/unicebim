@@ -2,10 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { writeFile, unlink, mkdir, access } from "node:fs/promises";
-import { constants } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 
 import { logger } from "@/lib/logger";
 import { buildRateLimitKey, checkRateLimit, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
@@ -688,55 +684,22 @@ export async function uploadBankStatementAction(
     return { ok: false, message: "Cüzdan bulunamadı veya yetkiniz yok." };
   }
 
-  // Save file temporarily
-  let tempFilePath: string | null = null;
+  // Read file into buffer (no need to write to disk)
+  let fileBuffer: Buffer;
   try {
-    const tempDir = join(tmpdir(), "unicebim-uploads");
-    
-    // Create directory if it doesn't exist
-    try {
-      await mkdir(tempDir, { recursive: true });
-    } catch (mkdirError) {
-      logger.error("uploadBankStatement.mkdir failed", {
-        requestId: originCheck.requestId,
-        error: mkdirError instanceof Error ? mkdirError.message : String(mkdirError),
-        tempDir,
-      });
-      return { ok: false, message: "Geçici dizin oluşturulamadı." };
-    }
-
-    const fileExtension = file.name.split(".").pop() || "xlsx";
-    tempFilePath = join(tempDir, `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`);
-
-    // Write file to temp directory
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    try {
-      await writeFile(tempFilePath, buffer);
-      
-      // Verify file was written and is accessible
-      try {
-        await access(tempFilePath, constants.F_OK | constants.R_OK);
-      } catch (accessError) {
-        logger.error("uploadBankStatement.fileAccess failed", {
-          requestId: originCheck.requestId,
-          error: accessError instanceof Error ? accessError.message : String(accessError),
-          tempFilePath,
-        });
-        return { ok: false, message: "Dosya yazıldı ama erişilemedi." };
-      }
-    } catch (writeError) {
-      logger.error("uploadBankStatement.writeFile failed", {
-        requestId: originCheck.requestId,
-        error: writeError instanceof Error ? writeError.message : String(writeError),
-        tempFilePath,
-      });
-      return { ok: false, message: "Dosya kaydedilemedi." };
-    }
+    fileBuffer = Buffer.from(arrayBuffer);
+  } catch (readError) {
+    logger.error("uploadBankStatement.readFile failed", {
+      requestId: originCheck.requestId,
+      error: readError instanceof Error ? readError.message : String(readError),
+    });
+    return { ok: false, message: "Dosya okunamadı." };
+  }
 
-    // Parse bank file
-    const parseResult = await parseBankFile(tempFilePath, bank as BankName, {
+  try {
+    // Parse bank file directly from buffer
+    const parseResult = await parseBankFile(fileBuffer, bank as BankName, {
       walletId,
       userId: user.id,
     });
@@ -850,7 +813,7 @@ export async function uploadBankStatementAction(
     logger.error("uploadBankStatement.failed", {
       requestId: originCheck.requestId,
       error: error instanceof Error ? error.message : String(error),
-      userId: user.id,
+      userId: user?.id,
       bank,
       walletId,
     });
@@ -859,19 +822,6 @@ export async function uploadBankStatementAction(
       ok: false,
       message: error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.",
     };
-  } finally {
-    // Clean up temp file
-    if (tempFilePath) {
-      try {
-        await unlink(tempFilePath);
-      } catch (cleanupError) {
-        logger.warn("uploadBankStatement.cleanup failed", {
-          requestId: originCheck.requestId,
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-          filePath: tempFilePath,
-        });
-      }
-    }
   }
 }
 

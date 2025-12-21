@@ -15,7 +15,7 @@ import type { ParseResult, ParsedTransaction, BankParserOptions } from "./types"
  * - Columns: Date(0), Amount(3), Balance(4), Description(8)
  */
 export async function parseIsBankFile(
-  filePath: string,
+  fileBuffer: Buffer,
   options: BankParserOptions,
 ): Promise<ParseResult> {
   const { walletId, userId } = options;
@@ -23,14 +23,13 @@ export async function parseIsBankFile(
   const transactions: ParsedTransaction[] = [];
 
   try {
-    // Read Excel file
+    // Read Excel file from buffer
     let workbook: XLSX.WorkBook;
     try {
-      workbook = XLSX.readFile(filePath);
+      workbook = XLSX.read(fileBuffer, { type: "buffer" });
     } catch (readError) {
-      logger.error("isBankParser.readFile failed", {
+      logger.error("isBankParser.read failed", {
         error: readError instanceof Error ? readError.message : String(readError),
-        filePath,
         walletId,
         userId,
       });
@@ -202,7 +201,6 @@ export async function parseIsBankFile(
   } catch (error) {
     logger.error("isBankParser.parse failed", {
       error: error instanceof Error ? error.message : String(error),
-      filePath,
       walletId,
       userId,
     });

@@ -15,7 +15,7 @@ import type { ParseResult, ParsedTransaction, BankParserOptions } from "./types"
  * - Columns: Date(1), Description(3), Amount(4), Balance(5)
  */
 export async function parseZiraatBankFile(
-  filePath: string,
+  fileBuffer: Buffer,
   options: BankParserOptions,
 ): Promise<ParseResult> {
   const { walletId, userId } = options;
@@ -23,14 +23,13 @@ export async function parseZiraatBankFile(
   const transactions: ParsedTransaction[] = [];
 
   try {
-    // Read Excel file
+    // Read Excel file from buffer
     let workbook: XLSX.WorkBook;
     try {
-      workbook = XLSX.readFile(filePath);
+      workbook = XLSX.read(fileBuffer, { type: "buffer" });
     } catch (readError) {
-      logger.error("ziraatBankParser.readFile failed", {
+      logger.error("ziraatBankParser.read failed", {
         error: readError instanceof Error ? readError.message : String(readError),
-        filePath,
         walletId,
         userId,
       });
@@ -201,7 +200,6 @@ export async function parseZiraatBankFile(
   } catch (error) {
     logger.error("ziraatBankParser.parse failed", {
       error: error instanceof Error ? error.message : String(error),
-      filePath,
       walletId,
       userId,
     });
