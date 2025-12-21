@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { writeFile, unlink, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { logger } from "@/lib/logger";
 import { buildRateLimitKey, checkRateLimit, getClientIp, rateLimitPolicies } from "@/lib/security/rate-limit";
@@ -19,6 +22,8 @@ import {
   type UpdateTransactionFormInput,
   updateTransactionSchema,
 } from "@/features/transactions/schemas";
+import { parseBankFile, type BankName } from "@/services/bank-parsers";
+import { detectCategory, detectTransactionType } from "@/features/transactions/import/detect-category";
 
 type FieldErrors = Record<string, string[] | undefined>;
 
@@ -513,6 +518,7 @@ export async function bulkImportTransactionsAction(
     category: string;
     date: string;
     description: string | null;
+    order?: number | null;
   }> = [];
 
   for (let i = 0; i < transactions.length; i++) {
@@ -558,6 +564,7 @@ export async function bulkImportTransactionsAction(
       category: parsed.data.category,
       date: date.toISOString(),
       description: parsed.data.description?.trim() || null,
+      order: null, // Default to null for manual imports
     });
   }
 
@@ -602,5 +609,231 @@ export async function bulkImportTransactionsAction(
     failedCount: failedTransactions.length,
     failedTransactions,
   };
+}
+
+export type BankStatementUploadResult = {
+  ok: true;
+  successCount: number;
+  failedCount: number;
+  errors: string[];
+  skippedCount: number;
+} | { ok: false; message: string };
+
+/**
+ * Upload and parse bank statement file.
+ *
+ * @param formData - FormData containing file, bank, and walletId
+ * @returns Upload result with parsed transactions
+ */
+export async function uploadBankStatementAction(
+  formData: FormData,
+): Promise<BankStatementUploadResult> {
+  const originCheck = await enforceSameOriginForServerAction("uploadBankStatementAction");
+  if (!originCheck.ok) return { ok: false, message: "Geçersiz istek." };
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    logger.warn("uploadBankStatement.getUser failed", {
+      requestId: originCheck.requestId,
+      message: userError.message,
+    });
+  }
+
+  if (!user) {
+    return { ok: false, message: "Oturum bulunamadı. Lütfen tekrar giriş yapın." };
+  }
+
+  const h = await headers();
+  const ip = getClientIp(h);
+  const rl = await checkRateLimit({
+    key: buildRateLimitKey({ scope: "tx.write", ip, userId: user.id }),
+    policy: { limit: 10, windowSeconds: 3600 }, // 10 per hour for bulk operations
+    requestId: originCheck.requestId,
+    context: { action: "uploadBankStatementAction", userId: user.id },
+  });
+  if (!rl.ok) return { ok: false, message: "Çok fazla istek. Lütfen biraz bekleyip tekrar deneyin." };
+
+  // Extract form data
+  const file = formData.get("file") as File | null;
+  const bank = formData.get("bank") as string | null;
+  const walletId = formData.get("walletId") as string | null;
+
+  if (!file) {
+    return { ok: false, message: "Dosya bulunamadı." };
+  }
+
+  if (!bank || (bank !== "ziraat" && bank !== "is-bank")) {
+    return { ok: false, message: "Geçerli bir banka seçin." };
+  }
+
+  if (!walletId) {
+    return { ok: false, message: "Cüzdan seçin." };
+  }
+
+  // Verify wallet belongs to user
+  const { data: wallet, error: walletError } = await supabase
+    .from("wallets")
+    .select("id")
+    .eq("id", walletId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (walletError || !wallet) {
+    return { ok: false, message: "Cüzdan bulunamadı veya yetkiniz yok." };
+  }
+
+  // Save file temporarily
+  const tempDir = join(tmpdir(), "unicebim-uploads");
+  await mkdir(tempDir, { recursive: true });
+  const fileExtension = file.name.split(".").pop() || "xlsx";
+  const tempFilePath = join(tempDir, `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`);
+
+  try {
+    // Write file to temp directory
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    await writeFile(tempFilePath, buffer);
+
+    // Parse bank file
+    const parseResult = await parseBankFile(tempFilePath, bank as BankName, {
+      walletId,
+      userId: user.id,
+    });
+
+    if (parseResult.errors.length > 0 && parseResult.transactions.length === 0) {
+      return {
+        ok: false,
+        message: `Dosya parse edilemedi: ${parseResult.errors.join(", ")}`,
+      };
+    }
+
+    // Transform parsed transactions to database format
+    const validatedTransactions: Array<{
+      user_id: string;
+      wallet_id: string;
+      amount: number;
+      type: "income" | "expense";
+      category: string;
+      date: string;
+      description: string | null;
+      order: number | null;
+    }> = [];
+
+    const errors: string[] = [];
+    let skippedCount = 0;
+
+    for (const tx of parseResult.transactions) {
+      // Detect transaction type and category
+      const type = detectTransactionType(tx.amount, tx.description);
+      let category = detectCategory(tx.description);
+      if (!category) {
+        category = type === "income" ? "KYK/Burs" : "Beslenme";
+      }
+
+      // Validate using schema
+      const parsed = createTransactionSchema.safeParse({
+        amount: tx.amount,
+        type,
+        category,
+        date: tx.date.toISOString().split("T")[0],
+      });
+
+      if (!parsed.success) {
+        const txErrors = parsed.error.flatten().fieldErrors;
+        const errorMessages: string[] = [];
+        for (const [, messages] of Object.entries(txErrors)) {
+          errorMessages.push(...(messages ?? []));
+        }
+        errors.push(`İşlem hatası: ${errorMessages.join(", ")}`);
+        skippedCount++;
+        continue;
+      }
+
+      validatedTransactions.push({
+        user_id: user.id,
+        wallet_id: walletId,
+        amount: parsed.data.amount,
+        type: parsed.data.type,
+        category: parsed.data.category,
+        date: tx.date.toISOString(),
+        description: tx.description || null,
+        order: tx.order,
+      });
+    }
+
+    // Batch insert
+    const CHUNK_SIZE = 500;
+    const chunks: typeof validatedTransactions[] = [];
+    for (let i = 0; i < validatedTransactions.length; i += CHUNK_SIZE) {
+      chunks.push(validatedTransactions.slice(i, i + CHUNK_SIZE));
+    }
+
+    for (const chunk of chunks) {
+      const { error: insertError } = await supabase.from("transactions").insert(chunk);
+
+      if (insertError) {
+        logger.error("uploadBankStatement.insert failed", {
+          requestId: originCheck.requestId,
+          code: insertError.code,
+          message: insertError.message,
+          chunkSize: chunk.length,
+        });
+        return {
+          ok: false,
+          message: `İşlemler kaydedilemedi: ${insertError.message}`,
+        };
+      }
+    }
+
+    logger.info("uploadBankStatement.success", {
+      requestId: originCheck.requestId,
+      userId: user.id,
+      bank,
+      walletId,
+      successCount: validatedTransactions.length,
+      failedCount: parseResult.errors.length + errors.length,
+      skippedCount,
+    });
+
+    revalidatePath("/transactions");
+    revalidatePath("/dashboard");
+
+    return {
+      ok: true,
+      successCount: validatedTransactions.length,
+      failedCount: parseResult.errors.length + errors.length,
+      errors: [...parseResult.errors, ...errors],
+      skippedCount,
+    };
+  } catch (error) {
+    logger.error("uploadBankStatement.failed", {
+      requestId: originCheck.requestId,
+      error: error instanceof Error ? error.message : String(error),
+      userId: user.id,
+      bank,
+      walletId,
+    });
+
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.",
+    };
+  } finally {
+    // Clean up temp file
+    try {
+      await unlink(tempFilePath);
+    } catch (cleanupError) {
+      logger.warn("uploadBankStatement.cleanup failed", {
+        requestId: originCheck.requestId,
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        filePath: tempFilePath,
+      });
+    }
+  }
 }
 

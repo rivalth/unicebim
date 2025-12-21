@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,27 +13,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { parseFile, type ParsedFileData, type ColumnMapping, type ParsedRow } from "./parse-file";
-import { detectCategory, detectTransactionType } from "./detect-category";
-import { enhanceDescriptionWithIBAN } from "./detect-iban";
-import { ALL_CATEGORIES, type TransactionCategory } from "@/features/transactions/categories";
-import { bulkImportTransactionsAction, type BulkImportResult } from "@/app/actions/transactions";
+import {
+  uploadBankStatementAction,
+  type BankStatementUploadResult,
+} from "@/app/actions/transactions";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createTransactionAction } from "@/app/actions/transactions";
+import { getSupportedBanks, type BankName } from "@/services/bank-parsers";
+import { getWallets } from "@/services/wallet.service";
+import { logger } from "@/lib/logger";
 
-type ProcessedRow = {
+type WalletOption = {
   id: string;
-  date: string;
-  amount: number;
-  description: string;
-  type: "income" | "expense";
-  category: TransactionCategory;
-  originalRow: ParsedRow;
-  errors: string[];
+  name: string;
+  is_default: boolean;
 };
 
 type ImportModalProps = {
@@ -43,38 +37,63 @@ type ImportModalProps = {
 };
 
 /**
- * Modal component for importing bank statements (Excel/CSV).
+ * Modal component for importing bank statements (Excel).
  *
  * Features:
+ * - Bank selection (Ziraat, İş Bankası)
+ * - Wallet selection
  * - Drag & drop file upload
- * - Column mapping UI
- * - Data preview and editing
- * - Category auto-detection
+ * - Automatic parsing based on bank
+ * - Duplicate detection
  * - Bulk import to database
  */
 export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps) {
-  const [step, setStep] = React.useState<"upload" | "mapping" | "preview" | "importing" | "results">("upload");
-  const [fileData, setFileData] = React.useState<ParsedFileData | null>(null);
-  const [mapping, setMapping] = React.useState<ColumnMapping>({ date: null, amount: null, description: null });
-  const [processedRows, setProcessedRows] = React.useState<ProcessedRow[]>([]);
+  const [step, setStep] = React.useState<"upload" | "importing" | "results">("upload");
+  const [selectedBank, setSelectedBank] = React.useState<BankName | "">("");
+  const [selectedWalletId, setSelectedWalletId] = React.useState<string>("");
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [wallets, setWallets] = React.useState<WalletOption[]>([]);
+  const [isLoadingWallets, setIsLoadingWallets] = React.useState(false);
   const [isImporting, setIsImporting] = React.useState(false);
-  const [importResult, setImportResult] = React.useState<BulkImportResult | null>(null);
-  const [failedRows, setFailedRows] = React.useState<ProcessedRow[]>([]);
-  const [successRows, setSuccessRows] = React.useState<ProcessedRow[]>([]);
+  const [uploadResult, setUploadResult] = React.useState<BankStatementUploadResult | null>(null);
+
+  // Load wallets on mount
+  React.useEffect(() => {
+    if (open && wallets.length === 0 && !isLoadingWallets) {
+      setIsLoadingWallets(true);
+      getWallets()
+        .then((walletList) => {
+          setWallets(
+            walletList.map((w) => ({
+              id: w.id,
+              name: w.name,
+              is_default: w.is_default,
+            })),
+          );
+          // Set default wallet if available
+          const defaultWallet = walletList.find((w) => w.is_default);
+          if (defaultWallet) {
+            setSelectedWalletId(defaultWallet.id);
+          } else if (walletList.length > 0) {
+            setSelectedWalletId(walletList[0]!.id);
+          }
+        })
+        .catch((error) => {
+          toast.error("Cüzdanlar yüklenemedi.");
+          logger.error("ImportModal.getWallets failed", { error });
+        })
+        .finally(() => {
+          setIsLoadingWallets(false);
+        });
+    }
+  }, [open, wallets.length, isLoadingWallets]);
 
   const onDrop = React.useCallback(
     async (acceptedFiles: File[]) => {
       if (acceptedFiles.length === 0) return;
 
       const file = acceptedFiles[0]!;
-      try {
-        const parsed = await parseFile(file);
-        setFileData(parsed);
-        setMapping(parsed.mapping);
-        setStep("mapping");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Dosya okunamadı.");
-      }
+      setSelectedFile(file);
     },
     [],
   );
@@ -82,7 +101,6 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "text/csv": [".csv"],
       "application/vnd.ms-excel": [".xls"],
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
     },
@@ -90,114 +108,19 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     disabled: step !== "upload",
   });
 
-  const handleMappingChange = (field: keyof ColumnMapping, value: string) => {
-    setMapping((prev) => ({
-      ...prev,
-      [field]: value === "" ? null : value,
-    }));
-  };
-
-  const handleProcessData = React.useCallback(() => {
-    if (!fileData) return;
-
-    const processed: ProcessedRow[] = [];
-    let rowIndex = 0;
-
-    for (const row of fileData.rows) {
-      const errors: string[] = [];
-      rowIndex++;
-
-      // Extract values based on mapping
-      const dateValue = mapping.date ? row[mapping.date] : null;
-      const amountValue = mapping.amount ? row[mapping.amount] : null;
-      const descriptionValue = mapping.description ? row[mapping.description] : null;
-
-      // Validate date
-      let dateStr = "";
-      if (!dateValue) {
-        errors.push("Tarih bulunamadı");
-      } else {
-        const date = parseDate(dateValue);
-        if (!date) {
-          errors.push("Geçersiz tarih formatı");
-        } else {
-          dateStr = date.toISOString().split("T")[0]!;
-        }
-      }
-
-      // Validate amount
-      let amount = 0;
-      if (!amountValue) {
-        errors.push("Tutar bulunamadı");
-      } else {
-        const numAmount =
-          typeof amountValue === "number"
-            ? amountValue
-            : parseFloat(String(amountValue).replace(/[^\d.,-]/g, "").replace(",", "."));
-        if (!Number.isFinite(numAmount) || numAmount === 0) {
-          errors.push("Geçersiz tutar");
-        } else {
-          amount = Math.abs(numAmount);
-        }
-      }
-
-      // Description (optional but recommended)
-      let description = descriptionValue ? String(descriptionValue).trim() : "";
-      
-      // Enhance description with IBAN detection if found
-      if (description) {
-        description = enhanceDescriptionWithIBAN(description);
-      }
-
-      // Detect type and category
-      const type = detectTransactionType(amountValue, description);
-      let category = detectCategory(description);
-      if (!category) {
-        // Default category based on type
-        category = type === "income" ? "KYK/Burs" : "Beslenme";
-      }
-
-      processed.push({
-        id: `row-${rowIndex}`,
-        date: dateStr,
-        amount,
-        description,
-        type,
-        category,
-        originalRow: row,
-        errors,
-      });
-    }
-
-    setProcessedRows(processed);
-    setStep("preview");
-  }, [fileData, mapping]);
-
-  const handleDeleteRow = (id: string) => {
-    setProcessedRows((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const handleUpdateRow = (id: string, updates: Partial<ProcessedRow>) => {
-    setProcessedRows((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          return { ...r, ...updates };
-        }
-        return r;
-      }),
-    );
-  };
-
   const handleImport = async () => {
-    if (processedRows.length === 0) {
-      toast.error("İçe aktarılacak veri bulunamadı.");
+    if (!selectedFile) {
+      toast.error("Lütfen bir dosya seçin.");
       return;
     }
 
-    // Filter out rows with errors
-    const validRows = processedRows.filter((r) => r.errors.length === 0);
-    if (validRows.length === 0) {
-      toast.error("Tüm satırlarda hata var. Lütfen düzeltin.");
+    if (!selectedBank) {
+      toast.error("Lütfen bir banka seçin.");
+      return;
+    }
+
+    if (!selectedWalletId) {
+      toast.error("Lütfen bir cüzdan seçin.");
       return;
     }
 
@@ -205,116 +128,57 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     setStep("importing");
 
     try {
-      const result = await bulkImportTransactionsAction(
-        validRows.map((r) => ({
-          amount: r.amount,
-          type: r.type,
-          category: r.category,
-          date: r.date,
-          description: r.description || null,
-        })),
-      );
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("bank", selectedBank);
+      formData.append("walletId", selectedWalletId);
+
+      const result = await uploadBankStatementAction(formData);
+
+      setUploadResult(result);
 
       if (result.ok) {
-        setImportResult(result);
-        
-        // Get successful rows (rows that were sent but not in failed list)
-        const failedIndices = new Set(result.failedTransactions.map((ft) => ft.index));
-        const successful = validRows
-          .map((r, idx) => ({ row: r, idx }))
-          .filter(({ idx }) => !failedIndices.has(idx))
-          .map(({ row }) => row);
-        setSuccessRows(successful);
-
-        // Convert failed transactions to ProcessedRow format for editing
-        const failed = result.failedTransactions.map((ft, idx) => {
-          // Find the original row from processedRows by matching transaction data
-          const originalRow = validRows[ft.index]?.originalRow ?? {};
-          const originalProcessedRow = validRows[ft.index];
-          return {
-            id: `failed-${idx}`,
-            date: ft.transaction.date,
-            amount: ft.transaction.amount,
-            description: originalProcessedRow?.description ?? "",
-            type: ft.transaction.type,
-            category: ft.transaction.category as TransactionCategory,
-            originalRow,
-            errors: ft.errors,
-          };
-        });
-        setFailedRows(failed);
         setStep("results");
         if (result.successCount > 0) {
           toast.success(`${result.successCount} işlem başarıyla içe aktarıldı.`);
         }
         if (result.failedCount > 0) {
-          toast.warning(`${result.failedCount} işlem eklenemedi. Lütfen düzeltin.`);
+          toast.warning(`${result.failedCount} işlem eklenemedi.`);
+        }
+        if (result.skippedCount > 0) {
+          toast.info(`${result.skippedCount} işlem duplicate olduğu için atlandı.`);
         }
       } else {
         toast.error(result.message || "İçe aktarma başarısız oldu.");
-        setStep("preview");
+        setStep("upload");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.");
-      setStep("preview");
+      setStep("upload");
     } finally {
       setIsImporting(false);
     }
   };
 
-  const handleRetryFailed = async (row: ProcessedRow) => {
-    try {
-      const result = await createTransactionAction({
-        amount: row.amount,
-        type: row.type,
-        category: row.category,
-        date: row.date,
-        description: row.description || null,
-      });
-
-      if (result.ok) {
-        setFailedRows((prev) => prev.filter((r) => r.id !== row.id));
-        setSuccessRows((prev) => [...prev, row]);
-        toast.success("İşlem başarıyla eklendi.");
-        // Update import result
-        if (importResult?.ok) {
-          setImportResult({
-            ...importResult,
-            successCount: importResult.successCount + 1,
-            failedCount: importResult.failedCount - 1,
-            failedTransactions: importResult.failedTransactions.filter(
-              (ft) => !(ft.transaction.date === row.date && ft.transaction.amount === row.amount),
-            ),
-          });
-        }
-      } else {
-        toast.error(result.message || "İşlem eklenemedi.");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.");
-    }
-  };
-
   const handleClose = () => {
     setStep("upload");
-    setFileData(null);
-    setMapping({ date: null, amount: null, description: null });
-    setProcessedRows([]);
+    setSelectedBank("");
+    setSelectedWalletId("");
+    setSelectedFile(null);
     setIsImporting(false);
-    setImportResult(null);
-    setFailedRows([]);
-    setSuccessRows([]);
+    setUploadResult(null);
     onOpenChange(false);
   };
 
   const handleFinish = () => {
-    if (importResult?.ok && importResult.failedCount === 0) {
+    if (uploadResult?.ok) {
       onSuccess?.();
     }
     handleClose();
   };
 
-  const validRowsCount = processedRows.filter((r) => r.errors.length === 0).length;
+  const supportedBanks = getSupportedBanks();
+  const canImport = selectedFile && selectedBank && selectedWalletId && !isImporting;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -328,205 +192,75 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
 
         {step === "upload" && (
           <div className="space-y-4">
-            <div
-              {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
-                isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25"
-              }`}
-            >
-              <input {...getInputProps()} />
-              <Upload className="mx-auto size-12 text-muted-foreground mb-4" />
-              <p className="text-sm font-medium mb-2">
-                {isDragActive ? "Dosyayı buraya bırakın" : "Dosyayı sürükleyip bırakın veya tıklayın"}
-              </p>
-              <p className="text-xs text-muted-foreground">CSV, XLSX veya XLS formatları desteklenir</p>
+            <div className="space-y-2">
+              <Label htmlFor="bank-select">Banka *</Label>
+              <select
+                id="bank-select"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={selectedBank}
+                onChange={(e) => setSelectedBank(e.target.value as BankName | "")}
+              >
+                <option value="">Seçiniz...</option>
+                {supportedBanks.map((bank) => (
+                  <option key={bank.value} value={bank.value}>
+                    {bank.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="wallet-select">Cüzdan *</Label>
+              {isLoadingWallets ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Cüzdanlar yükleniyor...</span>
+                </div>
+              ) : (
+                <select
+                  id="wallet-select"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={selectedWalletId}
+                  onChange={(e) => setSelectedWalletId(e.target.value)}
+                  disabled={wallets.length === 0}
+                >
+                  <option value="">Seçiniz...</option>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>
+                      {wallet.name} {wallet.is_default ? "(Varsayılan)" : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {wallets.length === 0 && !isLoadingWallets && (
+                <p className="text-xs text-muted-foreground">
+                  Önce bir cüzdan oluşturmanız gerekiyor.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Dosya *</Label>
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25"
+                }`}
+              >
+                <input {...getInputProps()} />
+                <Upload className="mx-auto size-10 text-muted-foreground mb-3" />
+                <p className="text-sm font-medium mb-1">
+                  {isDragActive ? "Dosyayı buraya bırakın" : "Dosyayı sürükleyip bırakın veya tıklayın"}
+                </p>
+                <p className="text-xs text-muted-foreground">XLSX veya XLS formatları desteklenir</p>
+                {selectedFile && (
+                  <p className="text-xs text-primary mt-2 font-medium">{selectedFile.name}</p>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {step === "mapping" && fileData && (
-          <div className="space-y-4">
-            <Alert>
-              <AlertCircle className="size-4" />
-              <AlertDescription>
-                Lütfen dosyanızdaki sütunları aşağıdaki alanlarla eşleştirin.
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date-column">Tarih Sütunu *</Label>
-                <select
-                  id="date-column"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={mapping.date ?? ""}
-                  onChange={(e) => handleMappingChange("date", e.target.value)}
-                >
-                  <option value="">Seçiniz...</option>
-                  {fileData.headers.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="amount-column">Tutar Sütunu *</Label>
-                <select
-                  id="amount-column"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={mapping.amount ?? ""}
-                  onChange={(e) => handleMappingChange("amount", e.target.value)}
-                >
-                  <option value="">Seçiniz...</option>
-                  {fileData.headers.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description-column">Açıklama Sütunu</Label>
-                <select
-                  id="description-column"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={mapping.description ?? ""}
-                  onChange={(e) => handleMappingChange("description", e.target.value)}
-                >
-                  <option value="">Seçiniz...</option>
-                  {fileData.headers.map((header) => (
-                    <option key={header} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <Button
-              onClick={handleProcessData}
-              disabled={!mapping.date || !mapping.amount}
-              className="w-full"
-            >
-              Verileri İşle ve Önizle
-            </Button>
-          </div>
-        )}
-
-        {step === "preview" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                {validRowsCount} / {processedRows.length} satır geçerli
-              </p>
-              <Button variant="outline" size="sm" onClick={() => setStep("mapping")}>
-                Eşleştirmeyi Değiştir
-              </Button>
-            </div>
-
-            <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">Tarih</th>
-                      <th className="px-3 py-2 text-left font-medium">Tutar</th>
-                      <th className="px-3 py-2 text-left font-medium">Açıklama</th>
-                      <th className="px-3 py-2 text-left font-medium">Tip</th>
-                      <th className="px-3 py-2 text-left font-medium">Kategori</th>
-                      <th className="px-3 py-2 text-left font-medium">İşlem</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {processedRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={`border-t ${row.errors.length > 0 ? "bg-destructive/10" : ""}`}
-                      >
-                        <td className="px-3 py-2">
-                          <Input
-                            type="date"
-                            value={row.date}
-                            onChange={(e) => handleUpdateRow(row.id, { date: e.target.value })}
-                            className="h-8 text-xs"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={row.amount}
-                            onChange={(e) =>
-                              handleUpdateRow(row.id, { amount: parseFloat(e.target.value) || 0 })
-                            }
-                            className="h-8 text-xs"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            value={row.description}
-                            onChange={(e) => handleUpdateRow(row.id, { description: e.target.value })}
-                            className="h-8 text-xs"
-                            placeholder="Açıklama"
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            value={row.type}
-                            onChange={(e) =>
-                              handleUpdateRow(row.id, { type: e.target.value as "income" | "expense" })
-                            }
-                            className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                          >
-                            <option value="expense">Gider</option>
-                            <option value="income">Gelir</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            value={row.category}
-                            onChange={(e) =>
-                              handleUpdateRow(row.id, { category: e.target.value as TransactionCategory })
-                            }
-                            className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                          >
-                            {ALL_CATEGORIES.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => handleDeleteRow(row.id)}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {processedRows.some((r) => r.errors.length > 0) && (
-              <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertDescription>
-                  Bazı satırlarda hata var. Lütfen düzeltin veya silin.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
-        )}
 
         {step === "importing" && (
           <div className="flex flex-col items-center justify-center py-8 space-y-4">
@@ -535,224 +269,52 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
           </div>
         )}
 
-        {step === "results" && importResult?.ok && (
+        {step === "results" && uploadResult && (
           <div className="space-y-4">
-            <Alert>
-              <CheckCircle2 className="size-4" />
-              <AlertDescription>
-                {importResult.successCount} işlem başarıyla eklendi.
-                {importResult.failedCount > 0 && ` ${importResult.failedCount} işlem eklenemedi.`}
-              </AlertDescription>
-            </Alert>
+            {uploadResult.ok ? (
+              <>
+                <Alert>
+                  <CheckCircle2 className="size-4" />
+                  <AlertDescription>
+                    {uploadResult.successCount} işlem başarıyla eklendi.
+                    {uploadResult.failedCount > 0 && ` ${uploadResult.failedCount} işlem eklenemedi.`}
+                    {uploadResult.skippedCount > 0 && ` ${uploadResult.skippedCount} işlem duplicate olduğu için atlandı.`}
+                  </AlertDescription>
+                </Alert>
 
-            <Tabs defaultValue="success" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="success">
-                  Başarılı ({importResult.successCount})
-                </TabsTrigger>
-                <TabsTrigger value="failed">
-                  Başarısız ({importResult.failedCount})
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="success" className="space-y-4">
-                {successRows.length > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted sticky top-0">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-medium">Tarih</th>
-                            <th className="px-3 py-2 text-left font-medium">Tutar</th>
-                            <th className="px-3 py-2 text-left font-medium">Açıklama</th>
-                            <th className="px-3 py-2 text-left font-medium">Tip</th>
-                            <th className="px-3 py-2 text-left font-medium">Kategori</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {successRows.map((row, idx) => (
-                            <tr key={`success-${idx}`} className="border-t">
-                              <td className="px-3 py-2">{row.date}</td>
-                              <td className="px-3 py-2">{row.amount.toFixed(2)} ₺</td>
-                              <td className="px-3 py-2">{row.description || "-"}</td>
-                              <td className="px-3 py-2">{row.type === "income" ? "Gelir" : "Gider"}</td>
-                              <td className="px-3 py-2">{row.category}</td>
-                            </tr>
+                {uploadResult.errors.length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="size-4" />
+                    <AlertDescription>
+                      <div className="space-y-1">
+                        <p className="font-medium">Hatalar:</p>
+                        <ul className="list-disc list-inside text-xs">
+                          {uploadResult.errors.map((error, idx) => (
+                            <li key={idx}>{error}</li>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Başarılı işlem bulunmuyor.</p>
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="failed" className="space-y-4">
-                {failedRows.length > 0 ? (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Aşağıdaki işlemleri düzenleyip tekrar ekleyebilirsiniz.
-                    </p>
-                    <div className="border rounded-lg overflow-hidden">
-                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted sticky top-0">
-                            <tr>
-                              <th className="px-3 py-2 text-left font-medium">Tarih</th>
-                              <th className="px-3 py-2 text-left font-medium">Tutar</th>
-                              <th className="px-3 py-2 text-left font-medium">Açıklama</th>
-                              <th className="px-3 py-2 text-left font-medium">Tip</th>
-                              <th className="px-3 py-2 text-left font-medium">Kategori</th>
-                              <th className="px-3 py-2 text-left font-medium">Hatalar</th>
-                              <th className="px-3 py-2 text-left font-medium">İşlem</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {failedRows.map((row) => (
-                              <tr key={row.id} className="border-t bg-destructive/5">
-                                <td className="px-3 py-2">
-                                  <Input
-                                    type="date"
-                                    value={row.date}
-                                    onChange={(e) => {
-                                      const updated = { ...row, date: e.target.value };
-                                      setFailedRows((prev) =>
-                                        prev.map((r) => (r.id === row.id ? updated : r)),
-                                      );
-                                    }}
-                                    className="h-8 text-xs"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={row.amount}
-                                    onChange={(e) => {
-                                      const updated = { ...row, amount: parseFloat(e.target.value) || 0 };
-                                      setFailedRows((prev) =>
-                                        prev.map((r) => (r.id === row.id ? updated : r)),
-                                      );
-                                    }}
-                                    className="h-8 text-xs"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Input
-                                    value={row.description}
-                                    onChange={(e) => {
-                                      const updated = { ...row, description: e.target.value };
-                                      setFailedRows((prev) =>
-                                        prev.map((r) => (r.id === row.id ? updated : r)),
-                                      );
-                                    }}
-                                    className="h-8 text-xs"
-                                    placeholder="Açıklama"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <select
-                                    value={row.type}
-                                    onChange={(e) => {
-                                      const updated = { ...row, type: e.target.value as "income" | "expense" };
-                                      setFailedRows((prev) =>
-                                        prev.map((r) => (r.id === row.id ? updated : r)),
-                                      );
-                                    }}
-                                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                                  >
-                                    <option value="expense">Gider</option>
-                                    <option value="income">Gelir</option>
-                                  </select>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <select
-                                    value={row.category}
-                                    onChange={(e) => {
-                                      const updated = {
-                                        ...row,
-                                        category: e.target.value as TransactionCategory,
-                                      };
-                                      setFailedRows((prev) =>
-                                        prev.map((r) => (r.id === row.id ? updated : r)),
-                                      );
-                                    }}
-                                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                                  >
-                                    {ALL_CATEGORIES.map((cat) => (
-                                      <option key={cat} value={cat}>
-                                        {cat}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <div className="text-xs text-destructive">
-                                    {row.errors.map((err, idx) => (
-                                      <div key={idx}>{err}</div>
-                                    ))}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleRetryFailed(row)}
-                                    className="h-8 text-xs"
-                                  >
-                                    Tekrar Dene
-                                  </Button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        </ul>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Başarısız işlem bulunmuyor.</p>
-                  </div>
+                    </AlertDescription>
+                  </Alert>
                 )}
-              </TabsContent>
-            </Tabs>
+              </>
+            ) : (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertDescription>{uploadResult.message}</AlertDescription>
+              </Alert>
+            )}
           </div>
         )}
 
         <DialogFooter>
           {step === "upload" && (
-            <Button variant="outline" onClick={handleClose}>
-              İptal
-            </Button>
-          )}
-          {step === "mapping" && (
             <>
-              <Button variant="outline" onClick={() => setStep("upload")}>
-                Geri
-              </Button>
               <Button variant="outline" onClick={handleClose}>
                 İptal
               </Button>
-            </>
-          )}
-          {step === "preview" && (
-            <>
-              <Button variant="outline" onClick={handleClose} disabled={isImporting}>
-                İptal
-              </Button>
-              <Button onClick={handleImport} disabled={isImporting || validRowsCount === 0}>
-                {isImporting ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    İçe Aktarılıyor...
-                  </>
-                ) : (
-                  `İçe Aktar (${validRowsCount} işlem)`
-                )}
+              <Button onClick={handleImport} disabled={!canImport}>
+                İçe Aktar
               </Button>
             </>
           )}
@@ -763,7 +325,7 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
           )}
           {step === "results" && (
             <Button onClick={handleFinish}>
-              {importResult?.ok && importResult.failedCount === 0 ? "Tamamla" : "Kapat"}
+              {uploadResult?.ok ? "Tamamla" : "Kapat"}
             </Button>
           )}
         </DialogFooter>
@@ -772,53 +334,4 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
   );
 }
 
-/**
- * Parse date from various formats.
- * Supports: YYYY-MM-DD, DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY, and Excel serial dates.
- */
-function parseDate(value: string | number | null | undefined): Date | null {
-  if (!value) return null;
-
-  // If it's a number, might be Excel serial date
-  if (typeof value === "number") {
-    // Excel epoch is 1900-01-01, but JavaScript uses 1970-01-01
-    // Excel incorrectly treats 1900 as a leap year, so we adjust
-    const excelEpoch = new Date(1899, 11, 30);
-    const date = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
-    if (Number.isFinite(date.getTime())) {
-      return date;
-    }
-  }
-
-  const str = String(value).trim();
-  if (!str) return null;
-
-  // Try ISO format first (YYYY-MM-DD)
-  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) {
-    const [, year, month, day] = isoMatch;
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    if (Number.isFinite(date.getTime())) {
-      return date;
-    }
-  }
-
-  // Try DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
-  const dateMatch = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
-  if (dateMatch) {
-    const [, day, month, year] = dateMatch;
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    if (Number.isFinite(date.getTime())) {
-      return date;
-    }
-  }
-
-  // Try native Date parsing as last resort
-  const date = new Date(str);
-  if (Number.isFinite(date.getTime()) && !isNaN(date.getTime())) {
-    return date;
-  }
-
-  return null;
-}
 

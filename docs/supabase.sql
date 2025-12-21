@@ -202,6 +202,14 @@ alter table public.transactions
 alter table public.transactions
   add column if not exists description text check (description is null or length(description) <= 500);
 
+-- Add order column to transactions if it doesn't exist (migration for existing tables)
+-- Used for ordering multiple transactions on the same date
+alter table public.transactions
+  add column if not exists "order" integer;
+
+-- Create index for order field (for efficient querying by date and order)
+create index if not exists transactions_user_id_date_order_idx on public.transactions (user_id, date desc, "order" asc nulls last);
+
 -- Add foreign key constraint for wallet_id (only if wallets table exists)
 do $$
 begin
