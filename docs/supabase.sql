@@ -113,16 +113,16 @@ create table if not exists public.transactions (
   -- Valid categories must match those defined in src/features/transactions/categories.ts
   constraint transactions_category_valid check (
     category in (
-      'KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş',  -- Income categories
-      'Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul'  -- Expense categories
+      'KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş', 'Diğer',  -- Income categories
+      'Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul', 'Diğer'  -- Expense categories
     )
   ),
   -- Ensure category matches transaction type (e.g., income categories only with income type)
   constraint transactions_category_matches_type check (
     (
-      type::text = 'income' and category in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş')
+      type::text = 'income' and category in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş', 'Diğer')
     ) or (
-      type::text = 'expense' and category in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul')
+      type::text = 'expense' and category in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul', 'Diğer')
     )
   )
 );
@@ -161,13 +161,13 @@ begin
   update public.transactions
   set category = 'KYK/Burs'
   where type::text = 'income'
-    and category not in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş');
+    and category not in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş', 'Diğer');
 
   -- Fix invalid expense categories (set to default: 'Beslenme')
   update public.transactions
   set category = 'Beslenme'
   where type::text = 'expense'
-    and category not in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul');
+    and category not in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul', 'Diğer');
 end;
 $$;
 
@@ -176,8 +176,8 @@ alter table public.transactions drop constraint if exists transactions_category_
 alter table public.transactions
   add constraint transactions_category_valid check (
     category in (
-      'KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş',  -- Income categories
-      'Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul'  -- Expense categories
+      'KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş', 'Diğer',  -- Income categories
+      'Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul', 'Diğer'  -- Expense categories
     )
   );
 
@@ -187,9 +187,9 @@ alter table public.transactions drop constraint if exists transactions_category_
 alter table public.transactions
   add constraint transactions_category_matches_type check (
     (
-      type::text = 'income' and category in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş')
+      type::text = 'income' and category in ('KYK/Burs', 'Aile Harçlığı', 'Freelance/Ek İş', 'Diğer')
     ) or (
-      type::text = 'expense' and category in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul')
+      type::text = 'expense' and category in ('Sosyal/Keyif', 'Beslenme', 'Ulaşım', 'Sabitler', 'Okul', 'Diğer')
     )
   );
 

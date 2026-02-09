@@ -1,5 +1,15 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Bus, Coffee, GraduationCap, HandCoins, Home, Laptop, Utensils } from "lucide-react";
+import {
+  BookOpen,
+  Bus,
+  Coffee,
+  GraduationCap,
+  HandCoins,
+  Home,
+  Laptop,
+  Utensils,
+  HelpCircle,
+} from "lucide-react";
 
 import type { TransactionCategory } from "@/features/transactions/categories";
 
@@ -12,6 +22,7 @@ export const CATEGORY_META: Record<TransactionCategory, CategoryMeta> = {
   "KYK/Burs": { label: "KYK/Burs", Icon: GraduationCap },
   "Aile Harçlığı": { label: "Aile Harçlığı", Icon: HandCoins },
   "Freelance/Ek İş": { label: "Freelance/Ek İş", Icon: Laptop },
+  Diğer: { label: "Diğer", Icon: HelpCircle },
 
   "Sosyal/Keyif": { label: "Sosyal/Keyif", Icon: Coffee },
   Beslenme: { label: "Beslenme", Icon: Utensils },
